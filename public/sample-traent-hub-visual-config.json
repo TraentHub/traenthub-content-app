@@ -1,0 +1,98 @@
+{
+  "version": "stable-import-fix",
+  "global": {
+    "canvas": "1080x1350",
+    "accent": "#FF3D00",
+    "lightSlideBackground": "#F5F2ED"
+  },
+  "slides": {
+    "1": {
+      "role": "opener",
+      "status": "draft",
+      "kicker": "TRAENT HUB",
+      "footerMeta": "slide 01",
+      "title": "Common ground for bold minds.",
+      "body": "Non un coworking. Non un incubatore. Una Residency gratuita nel cuore di Pisa.",
+      "style": "Manifesto",
+      "theme": "light",
+      "layout": "poster_text",
+      "brand": "full_lockup",
+      "brandPosition": "bottom-left",
+      "asset": "system-field",
+      "textSize": {
+        "title": 0,
+        "body": 0,
+        "kicker": 0,
+        "footer": 0
+      },
+      "emphasisRules": [
+        {
+          "id": "r_sample_1",
+          "field": "title",
+          "target": "bold minds",
+          "device": "italic_pop",
+          "default": true
+        }
+      ]
+    },
+    "2": {
+      "role": "content",
+      "status": "draft",
+      "kicker": "PERCHÉ ESISTE",
+      "footerMeta": "slide 02",
+      "title": "Le idee migliori nascono dove ci sono le persone giuste.",
+      "body": "Traent Hub crea un contesto in cui prossimità, confronto e qualità delle persone generano connessioni, idee e progetti.",
+      "style": "Editorial",
+      "theme": "light",
+      "layout": "left_text_right_visual",
+      "brand": "full_lockup",
+      "brandPosition": "bottom-left",
+      "asset": "orbit-dotted",
+      "textSize": {
+        "title": 0,
+        "body": 0,
+        "kicker": 0,
+        "footer": 0
+      },
+      "emphasisRules": [
+        {
+          "id": "r_sample_2",
+          "field": "title",
+          "target": "persone giuste",
+          "device": "underline_pop",
+          "default": true
+        }
+      ]
+    },
+    "3": {
+      "role": "closing",
+      "status": "draft",
+      "kicker": "APPLICATION",
+      "footerMeta": "slide 03",
+      "title": "Traent Hub è il luogo giusto per te? Scoprilo.",
+      "body": "Applications for the first Cohort open soon. Prenota il tuo posto al Demo Day. Contatto: [contact@traenthub.com].",
+      "style": "Energetic",
+      "theme": "dark",
+      "layout": "centered_manifesto",
+      "brand": "full_lockup",
+      "brandPosition": "bottom-left",
+      "asset": "ordered-network",
+      "textSize": {
+        "title": 0,
+        "body": 0,
+        "kicker": 0,
+        "footer": 0
+      },
+      "emphasisRules": [
+        {
+          "id": "r_sample_3",
+          "field": "body",
+          "target": "Applications",
+          "device": "plain_orange",
+          "default": false
+        }
+      ]
+    }
+  },
+  "instructions": "JSON is the source of truth. Import this into the configurator, edit visuals, export JSON, then generate HTML preview."
+}

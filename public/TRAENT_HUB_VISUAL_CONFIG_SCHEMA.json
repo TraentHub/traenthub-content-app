@@ -1,0 +1,40 @@
+{
+  "version": "stable-import-fix",
+  "global": {
+    "canvas": "1080x1350",
+    "accent": "#FF3D00",
+    "lightSlideBackground": "#F5F2ED"
+  },
+  "slides": {
+    "1": {
+      "role": "opener",
+      "status": "draft",
+      "kicker": "TRAENT HUB",
+      "footerMeta": "visual config",
+      "title": "Slide title",
+      "body": "Slide body",
+      "style": "Manifesto",
+      "theme": "light",
+      "layout": "poster_text",
+      "brand": "full_lockup",
+      "brandPosition": "bottom-left",
+      "asset": "system-field",
+      "textSize": {
+        "title": 0,
+        "body": 0,
+        "kicker": 0,
+        "footer": 0
+      },
+      "emphasisRules": [
+        {
+          "id": "optional-rule-id",
+          "field": "title",
+          "target": "target text",
+          "device": "underline_pop",
+          "default": true
+        }
+      ]
+    }
+  },
+  "instructions": "JSON is the source of truth. Import must accept raw JSON or fenced JSON. Light slide background is locked to #F5F2ED. brandPosition controls logo placement."
+}
