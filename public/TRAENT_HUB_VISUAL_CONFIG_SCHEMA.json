@@ -1,40 +1,159 @@
 {
-  "version": "stable-import-fix",
-  "global": {
-    "canvas": "1080x1350",
-    "accent": "#FF3D00",
-    "lightSlideBackground": "#F5F2ED"
-  },
-  "slides": {
-    "1": {
-      "role": "opener",
-      "status": "draft",
-      "kicker": "TRAENT HUB",
-      "footerMeta": "visual config",
-      "title": "Slide title",
-      "body": "Slide body",
-      "style": "Manifesto",
-      "theme": "light",
-      "layout": "poster_text",
-      "brand": "full_lockup",
-      "brandPosition": "bottom-left",
-      "asset": "system-field",
-      "textSize": {
-        "title": 0,
-        "body": 0,
-        "kicker": 0,
-        "footer": 0
-      },
-      "emphasisRules": [
-        {
-          "id": "optional-rule-id",
-          "field": "title",
-          "target": "target text",
-          "device": "underline_pop",
-          "default": true
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Traent Hub Visual Config",
+  "description": "Configuration schema for the Traent Hub Visual Configurator",
+  "type": "object",
+  "required": ["version", "global", "slides"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "stable-import-fix"
+    },
+    "global": {
+      "type": "object",
+      "required": ["canvas", "accent"],
+      "properties": {
+        "canvas": {
+          "type": "string",
+          "description": "Slide dimensions as WxH",
+          "enum": ["1080x1350", "1080x1080", "1080x1920", "1200x1200", "1600x900", "1920x1080"]
+        },
+        "accent": {
+          "type": "string",
+          "description": "Brand accent color (hex)",
+          "default": "#FF3D00"
+        },
+        "name": {
+          "type": "string",
+          "description": "Design name (used for export filenames)"
+        },
+        "lightSlideBackground": {
+          "type": "string",
+          "description": "Light slide background color (hex)",
+          "default": "#F5F2ED"
         }
-      ]
+      }
+    },
+    "slides": {
+      "type": "object",
+      "description": "Map of slide ID to slide config",
+      "additionalProperties": {
+        "$ref": "#/$defs/slide"
+      }
+    },
+    "instructions": {
+      "type": "string",
+      "description": "Optional instructions for the GPT"
     }
   },
-  "instructions": "JSON is the source of truth. Import must accept raw JSON or fenced JSON. Light slide background is locked to #F5F2ED. brandPosition controls logo placement."
+  "$defs": {
+    "slide": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["opener", "content", "closing"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "approved", "needs_revision"]
+        },
+        "kicker": {
+          "type": "string",
+          "description": "Kicker text (empty string to hide)"
+        },
+        "footerMeta": {
+          "type": "string",
+          "description": "Footer meta text (empty string to hide)"
+        },
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "style": {
+          "type": "string",
+          "enum": ["Manifesto", "Editorial", "Energetic", "Institutional-light"]
+        },
+        "theme": {
+          "type": "string",
+          "enum": ["light", "dark"]
+        },
+        "layout": {
+          "type": "string",
+          "enum": ["poster_text", "left_text_right_visual", "centered_manifesto", "split_panel"]
+        },
+        "brand": {
+          "type": "string",
+          "enum": ["full_lockup", "symbol_only", "wordmark_only", "none"]
+        },
+        "brandPosition": {
+          "type": "string",
+          "enum": ["bottom-left", "bottom-right", "top-left", "top-right"]
+        },
+        "asset": {
+          "type": "string",
+          "description": "Key into BASE_GRAPHICS registry (e.g. system-field, orbit-dotted, fragmented-network, ordered-network, force-map, handshake-trust, none)"
+        },
+        "graphicPos": {
+          "type": "object",
+          "description": "Custom graphic position override",
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" },
+            "size": { "type": "number" }
+          }
+        },
+        "textSize": {
+          "type": "object",
+          "description": "Scale steps for text elements (-3 to +3)",
+          "properties": {
+            "title": { "type": "number", "default": 0 },
+            "body": { "type": "number", "default": 0 },
+            "kicker": { "type": "number", "default": 0 },
+            "footer": { "type": "number", "default": 0 }
+          }
+        },
+        "titleWidth": {
+          "type": ["number", "null"],
+          "description": "Title box width as percentage (null = auto)"
+        },
+        "emphasisRules": {
+          "type": "array",
+          "description": "Emphasis device rules applied to text fields",
+          "items": {
+            "$ref": "#/$defs/emphasisRule"
+          }
+        }
+      }
+    },
+    "emphasisRule": {
+      "type": "object",
+      "required": ["field", "target", "device"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique rule ID (auto-generated if missing)"
+        },
+        "field": {
+          "type": "string",
+          "enum": ["title", "body", "kicker", "footerMeta"]
+        },
+        "target": {
+          "type": "string",
+          "description": "Case-insensitive text to match in the field"
+        },
+        "device": {
+          "type": "string",
+          "description": "Key into EMPHASIS_DEVICES registry",
+          "enum": ["underline_pop", "italic_pop", "strike_muted", "outline", "filled_highlight", "plain_orange"]
+        },
+        "default": {
+          "type": "boolean",
+          "description": "Whether this is a default/preset rule"
+        }
+      }
+    }
+  }
 }

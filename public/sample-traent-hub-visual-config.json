@@ -3,6 +3,7 @@
   "global": {
     "canvas": "1080x1350",
     "accent": "#FF3D00",
+    "name": "sample-deck",
     "lightSlideBackground": "#F5F2ED"
   },
   "slides": {

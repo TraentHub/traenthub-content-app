@@ -1,62 +1,48 @@
-# README_DEPLOY
+# Deployment Guide
 
-## Goal
+## Quick start (local development)
 
-Deploy the Traent Hub Visual Configurator as a static app.
+```bash
+npm install    # Installs Playwright + Chromium
+npm run dev    # Starts server.js on http://localhost:3000
+```
 
-## Recommended first deployment
+The server (`server.js`) does two things:
+1. **Serves static files** — the app works entirely in the browser
+2. **`POST /screenshot`** — uses Playwright for pixel-perfect PNG export
 
-Use Vercel or Netlify.
+## Deploying as a static site
 
-The simplest deployable file is:
+For deployment without PNG export (JSON + HTML export still work):
 
-`index.html`
+Deploy only `index.html` to any static host. No build step needed.
 
-You can start by copying:
+### Vercel
+1. Create a new project, connect repo
+2. Framework: Other, no build command
+3. Output directory: project root
 
-`traent-hub-visual-configurator.html`
+### Netlify
+1. Create new site, drag-and-drop or connect repo
+2. Publish directory: project root
+3. No build command
 
-to:
-
-`index.html`
-
-## Vercel
-
-1. Create a new project.
-2. Upload or connect the folder.
-3. Use static deployment.
-4. No build command required if using plain HTML.
-5. Output directory: project root.
-
-## Netlify
-
-1. Create a new site.
-2. Drag and drop the folder or connect repo.
-3. Publish directory: project root.
-4. No build command required.
-
-## GitHub Pages
-
-1. Create repo.
-2. Put `index.html` at root.
-3. Enable GitHub Pages from main branch.
+### GitHub Pages
+1. Push `index.html` to repo root
+2. Enable GitHub Pages from main branch
 
 ## Stable URL
 
-Try to create a stable URL like:
+Aim for a stable URL like `https://traent-hub-visual.vercel.app` so the GPT can always direct users there.
 
-`https://traent-hub-visual.vercel.app`
+## Phase 1 (current)
 
-The GPT can then always tell the user:
+- No backend required for basic usage
+- PNG export needs the local server (`npm run dev`)
+- All data persists in browser localStorage
 
-“Open the Traent Hub Visual Configurator and import this JSON.”
+## Phase 2 (future)
 
-## Phase 1
-
-No backend.
-No API.
-No auth.
-
-## Phase 2
-
-Add backend/API and GPT Action only after static workflow is stable.
+- Backend API for PNG export server-side
+- GPT Action integration
+- See `docs/TRAENT_HUB_API_FUTURE_PLAN.md`

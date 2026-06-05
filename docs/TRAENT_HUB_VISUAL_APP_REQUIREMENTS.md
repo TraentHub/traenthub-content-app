@@ -121,7 +121,10 @@ The app must preserve current editing capabilities:
 - graphic assets;
 - import/export;
 - focus edit mode;
-- deck review mode.
+- deck review mode;
+- design name (for export filenames);
+- kicker and footer toggle (show/hide per slide);
+- PNG export via Playwright (pixel-perfect, ZIP download).
 
 ---
 
@@ -260,7 +263,9 @@ Test visual editing:
 Test export:
 - copy JSON;
 - download JSON;
-- copy approved config for GPT.
+- copy approved config for GPT;
+- download HTML deck;
+- PNG export (requires `npm run dev` server running).
 
 Test deployment:
 - open app on hosted URL;
