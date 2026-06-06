@@ -1,7 +1,8 @@
 {
   "outputDirectory": "public",
   "redirects": [
-    { "source": "/", "destination": "/index.html", "permanent": false }
+    { "source": "/", "destination": "/index.html", "permanent": false },
+    { "source": "/privacy", "destination": "/privacy.html", "permanent": false }
   ],
   "headers": [
     {
