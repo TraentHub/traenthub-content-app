@@ -194,11 +194,9 @@ async function handleApiRoute(req, res) {
 // ── Vercel Export ───────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
-  // Vercel strips the /api prefix, so req.url starts with /schema, /configs, etc.
-  // Normalize by adding /api prefix if missing (for matching)
-  const url = req.url || '/';
-  if (!url.startsWith('/api/')) {
-    req.url = '/api' + url;
-  }
+  // Normalize: ensure req.url starts with /api/
+  // Vercel may send /schema or /api/schema depending on config
+  const raw = req.url || '/';
+  req.url = raw.startsWith('/api/') ? raw : '/api' + raw;
   return handleApiRoute(req, res);
 }
