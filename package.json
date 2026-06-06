@@ -8,8 +8,5 @@
   },
   "dependencies": {
     "playwright": "^1.40.0"
-  },
-  "optionalDependencies": {
-    "@vercel/kv": "^3.0.0"
   }
 }

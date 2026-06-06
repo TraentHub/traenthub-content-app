@@ -5,57 +5,10 @@
 const Schema = require('../shared/config-schema.js');
 
 // ── Storage ────────────────────────────────────────────────────────────────
-
-async function createKVStore() {
-  try {
-    const { kv } = await import('@vercel/kv');
-    return {
-      async create(session) {
-        await kv.set('session:' + session.id, {
-          id: session.id,
-          status: session.status,
-          config: JSON.stringify(session.config),
-          createdAt: session.createdAt,
-          updatedAt: session.updatedAt,
-        });
-        return session;
-      },
-      async get(id) {
-        const row = await kv.get('session:' + id);
-        if (!row) return null;
-        return {
-          id: row.id,
-          status: row.status,
-          config: JSON.parse(row.config),
-          createdAt: row.createdAt,
-          updatedAt: row.updatedAt,
-        };
-      },
-      async update(id, config, status) {
-        const existing = await this.get(id);
-        if (!existing) return null;
-        const updated = {
-          id: existing.id,
-          status: status !== undefined ? status : existing.status,
-          config: config !== undefined ? JSON.stringify(config) : JSON.stringify(existing.config),
-          createdAt: existing.createdAt,
-          updatedAt: new Date().toISOString(),
-        };
-        await kv.set('session:' + id, updated);
-        return {
-          id: updated.id,
-          status: updated.status,
-          config: JSON.parse(updated.config),
-          createdAt: updated.createdAt,
-          updatedAt: updated.updatedAt,
-        };
-      },
-    };
-  } catch (e) {
-    console.error('Vercel KV not available, using in-memory store:', e.message);
-    return createMemoryStore();
-  }
-}
+// In-memory store for POC. Sessions are lost on function restart.
+// For production persistence, connect an Upstash Redis integration from
+// https://vercel.com/marketplace?category=storage&search=redis
+// and replace createStore() with an Upstash-backed implementation.
 
 function createMemoryStore() {
   const sessions = new Map();
@@ -98,10 +51,10 @@ function createMemoryStore() {
   };
 }
 
-// Lazy-init store (Vercel KV in production, in-memory as fallback)
+// Lazy-init store
 let _store = null;
-async function getStore() {
-  if (!_store) _store = await createKVStore();
+function getStore() {
+  if (!_store) _store = createMemoryStore();
   return _store;
 }
 
