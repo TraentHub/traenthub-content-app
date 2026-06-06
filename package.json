@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "node server.js"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@upstash/redis": "^1.38.0"
+  },
   "devDependencies": {
     "playwright": "^1.40.0"
   }

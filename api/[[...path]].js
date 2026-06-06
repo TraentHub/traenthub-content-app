@@ -5,10 +5,60 @@
 const Schema = require('../public/shared/config-schema.js');
 
 // ── Storage ────────────────────────────────────────────────────────────────
-// In-memory store for POC. Sessions are lost on function restart.
-// For production persistence, connect an Upstash Redis integration from
-// https://vercel.com/marketplace?category=storage&search=redis
-// and replace createStore() with an Upstash-backed implementation.
+// Uses Upstash Redis when UPSTASH_REDIS_REST_URL is set (production).
+// Falls back to in-memory store for local development.
+
+function createUpstashStore() {
+  const { Redis } = require('@upstash/redis');
+  const redis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN,
+  });
+
+  return {
+    async create(session) {
+      await redis.set('session:' + session.id, JSON.stringify({
+        id: session.id,
+        status: session.status,
+        config: JSON.stringify(session.config),
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+      }));
+      return session;
+    },
+    async get(id) {
+      const raw = await redis.get('session:' + id);
+      if (!raw) return null;
+      const row = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return {
+        id: row.id,
+        status: row.status,
+        config: typeof row.config === 'string' ? JSON.parse(row.config) : row.config,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      };
+    },
+    async update(id, config, status) {
+      const existing = await this.get(id);
+      if (!existing) return null;
+      const updated = {
+        id: existing.id,
+        status: status !== undefined ? status : existing.status,
+        config: config !== undefined ? JSON.stringify(config) : JSON.stringify(existing.config),
+        createdAt: existing.createdAt,
+        updatedAt: new Date().toISOString(),
+      };
+      await redis.set('session:' + id, JSON.stringify(updated));
+      return {
+        id: updated.id,
+        status: updated.status,
+        config: JSON.parse(updated.config),
+        createdAt: updated.createdAt,
+        updatedAt: updated.updatedAt,
+      };
+    },
+  };
+}
 
 function createMemoryStore() {
   const sessions = new Map();
@@ -51,10 +101,12 @@ function createMemoryStore() {
   };
 }
 
-// Lazy-init store
+// Lazy-init store: Upstash in production, in-memory for local dev
 let _store = null;
 function getStore() {
-  if (!_store) _store = createMemoryStore();
+  if (!_store) {
+    _store = process.env.UPSTASH_REDIS_REST_URL ? createUpstashStore() : createMemoryStore();
+  }
   return _store;
 }
 
