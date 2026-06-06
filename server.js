@@ -3,7 +3,7 @@ const http  = require('http');
 const fs    = require('fs');
 const path  = require('path');
 const os    = require('os');
-const Schema = require('./shared/config-schema.js');
+const Schema = require('./public/shared/config-schema.js');
 
 const PORT = process.env.PORT || 3000;
 
@@ -275,7 +275,7 @@ const server = http.createServer(async (req, res) => {
 
   // Static files
   const urlPath = req.url.split('?')[0];
-  const filePath = urlPath === '/' ? './index.html' : '.' + decodeURIComponent(urlPath);
+  const filePath = urlPath === '/' ? './public/index.html' : './public' + decodeURIComponent(urlPath);
   const ext = path.extname(filePath).toLowerCase();
   try {
     const data = fs.readFileSync(filePath);

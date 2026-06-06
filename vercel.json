@@ -1,6 +1,4 @@
 {
-  "buildCommand": null,
-  "outputDirectory": ".",
   "headers": [
     {
       "source": "/api/:path*",

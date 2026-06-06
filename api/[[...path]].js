@@ -2,7 +2,7 @@
 // Vercel serverless function — catch-all handler for all /api/* routes.
 // Adapts our API logic to Vercel's (req, res) interface.
 
-const Schema = require('../shared/config-schema.js');
+const Schema = require('../public/shared/config-schema.js');
 
 // ── Storage ────────────────────────────────────────────────────────────────
 // In-memory store for POC. Sessions are lost on function restart.
