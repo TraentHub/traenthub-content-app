@@ -521,6 +521,8 @@ const EMPHASIS_DEVICES = {
 const roles = {"1":"opener","2":"content","3":"content","4":"content","5":"closing"};
 let state = {version:"stable-import-fix", global:{canvas:"1080x1350", accent:TRAENT_ORANGE}, slides:{}};
 let currentSessionId = null;
+let _autoSaveTimer = null;
+let _autoSaving = false;
 
 function uid(){ return "r_" + Math.random().toString(36).slice(2,9); }
 function defaultTextSizes(){ return CONFIG_SCHEMA.defaultTextSizes(); }
@@ -732,6 +734,7 @@ function render(){
   const s=current(); $("summary").textContent=`Slide ${$("slide").value} · ${state.global.canvas} · ${s.style} · ${s.theme} · ${s.asset}`;
   fitActivePreview(); fitTitles(); syncJson();
   savePreferences();
+  autoSaveSession();
 }
 function deviceLabel(v){return EMPHASIS_DEVICES[v]?.label||"?";}
 function renderRuleList(){
@@ -1345,6 +1348,25 @@ function updateSaveBtn(){
   }
   const indicator=$("sessionIndicator");
   if(indicator) indicator.textContent=currentSessionId?"Session: "+currentSessionId.slice(0,8)+"…":"";
+}
+
+function autoSaveSession(){
+  if(!currentSessionId) return;
+  clearTimeout(_autoSaveTimer);
+  const indicator=$("sessionIndicator");
+  _autoSaveTimer=setTimeout(async()=>{
+    if(!currentSessionId||_autoSaving) return;
+    _autoSaving=true;
+    if(indicator) indicator.textContent="Saving…";
+    try{
+      await apiUpdateSession(currentSessionId,{version:state.version,global:state.global,slides:state.slides});
+      if(indicator) indicator.textContent="Session: "+currentSessionId.slice(0,8)+"… ✓";
+      setTimeout(()=>{if(indicator)indicator.textContent=currentSessionId?"Session: "+currentSessionId.slice(0,8)+"…":"";},1500);
+    }catch(e){
+      if(indicator) indicator.textContent="Save failed";
+    }
+    _autoSaving=false;
+  },2000);
 }
 
 </script>
