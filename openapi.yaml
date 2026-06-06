@@ -1,0 +1,573 @@
+openapi: 3.1.0
+info:
+  title: Traent Hub Visual Config API
+  description: >
+    API for creating, validating, and managing visual configuration sessions
+    for the Traent Hub Visual Configurator.
+
+    ## Workflow
+
+    1. `GET /api/schema` — read current enums, defaults, and guidance.
+    2. Build a config JSON with at least `{ global: { canvas, accent }, slides: { "1": { title, ... } } }`.
+    3. `POST /api/configs/validate` — validate and normalize the config.
+    4. `POST /api/configs` — create a session (requires API key).
+    5. Share the returned URL with the user to open the visual editor.
+
+    ## Security
+
+    - `POST /api/configs` requires an API key via `Authorization: Bearer <key>`.
+    - Session read/update is protected by the unguessable session ID (128-bit UUID).
+    - **POC limitation**: no rate limiting, no session expiry, no per-user auth.
+      A future `editToken` field is planned for stronger write protection.
+  version: stable-import-fix
+  contact:
+    name: Traent Hub
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+  - url: https://your-app.vercel.app
+    description: Production
+
+paths:
+  /api/schema:
+    get:
+      operationId: getCurrentSchema
+      summary: Get the current visual config schema
+      description: >
+        Returns enums, defaults, required/optional fields, and guidance
+        derived from the application's shared schema module.
+        This is the single source of truth for building valid configs.
+      responses:
+        "200":
+          description: Schema descriptor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchemaDescriptor"
+              example:
+                version: stable-import-fix
+                enums:
+                  canvas: ["1080x1350", "1920x1080"]
+                  theme: ["light", "dark", "split"]
+                  layout: ["left_text_right_visual", "centered_manifesto", "poster_text", "split_panel"]
+                  style: ["Manifesto", "Editorial", "Energetic", "Institutional-light"]
+                  asset: ["system-field", "orbit-dotted", "none"]
+
+  /api/configs/validate:
+    post:
+      operationId: validateVisualConfig
+      summary: Validate and normalize a visual config
+      description: >
+        Validates the config structure, checks enum values, and normalizes
+        missing fields with defaults. Returns warnings for non-blocking issues
+        (e.g. emphasis targets not found in text).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidateRequest"
+            example:
+              config:
+                global:
+                  canvas: "1080x1350"
+                  accent: "#FF3D00"
+                slides:
+                  "1":
+                    title: "Common ground for bold minds."
+                    style: "Manifesto"
+      responses:
+        "200":
+          description: Config is valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidateResponse"
+        "422":
+          description: Config has validation errors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidateResponse"
+
+  /api/configs:
+    post:
+      operationId: createVisualConfigSession
+      summary: Create a visual config session
+      description: >
+        Creates a new session from a validated config. Returns a session URL
+        that can be opened in the visual configurator app.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionRequest"
+            example:
+              config:
+                global:
+                  canvas: "1080x1350"
+                  accent: "#FF3D00"
+                  name: "my-deck"
+                slides:
+                  "1":
+                    role: "opener"
+                    title: "Bold minds, common ground."
+                    style: "Manifesto"
+                    theme: "light"
+                    layout: "poster_text"
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          description: Unauthorized — missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "Unauthorized"
+                message: "TRAENT_API_KEY not configured"
+        "422":
+          description: Config validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/configs/{id}:
+    get:
+      operationId: getVisualConfigSession
+      summary: Get a session by ID
+      description: >
+        Returns the full session including the current config.
+        The session ID itself serves as the auth token (128-bit UUID).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Session ID (32-char hex UUID)
+      responses:
+        "200":
+          description: Session found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    patch:
+      operationId: updateVisualConfigSession
+      summary: Update a session's config (full replacement)
+      description: >
+        Replaces the entire config with the provided normalized config.
+        No merge — the new config completely replaces the previous one.
+        The session ID serves as the auth token.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSessionRequest"
+      responses:
+        "200":
+          description: Session updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateSessionResponse"
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Config validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/configs/{id}/approve:
+    post:
+      operationId: approveVisualConfigSession
+      summary: Mark a session as approved
+      description: >
+        Sets the session status to "approved". Used to signal that the
+        visual config is finalized and ready for output generation.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateSessionResponse"
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: API key. Set TRAENT_API_KEY environment variable on the server.
+
+  schemas:
+    VisualConfig:
+      type: object
+      required:
+        - slides
+      properties:
+        version:
+          type: string
+          description: Schema version
+          example: "stable-import-fix"
+        global:
+          $ref: "#/components/schemas/GlobalConfig"
+        slides:
+          type: object
+          description: Map of slide ID to slide config. Keys are strings ("1", "2", etc.), sorted numerically.
+          additionalProperties:
+            $ref: "#/components/schemas/SlideConfig"
+          minProperties: 1
+        instructions:
+          type: string
+          description: Optional metadata for GPT workflow. Preserved but not validated.
+
+    GlobalConfig:
+      type: object
+      properties:
+        canvas:
+          type: string
+          description: Slide dimensions
+          enum: ["1080x1350", "1920x1080", "1200x1200", "1600x900", "1080x1080", "1080x1920"]
+          default: "1080x1350"
+        accent:
+          type: string
+          description: Brand accent color (hex)
+          default: "#FF3D00"
+        name:
+          type: string
+          description: Design name (used for export filenames)
+          default: ""
+        lightSlideBackground:
+          type: string
+          description: Override for light theme slide background
+          default: "#F5F2ED"
+
+    SlideConfig:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: ["opener", "content", "closing"]
+        status:
+          type: string
+          enum: ["draft", "selected", "needs_revision", "approved"]
+          default: "draft"
+        title:
+          type: string
+          description: Slide title (required for meaningful output)
+        body:
+          type: string
+        kicker:
+          type: string
+          description: Overline / category label
+          default: "TRAENT HUB"
+        footerMeta:
+          type: string
+          default: "visual config"
+        style:
+          type: string
+          enum: ["Manifesto", "Editorial", "Energetic", "Institutional-light"]
+        theme:
+          type: string
+          enum: ["light", "dark", "split"]
+          default: "light"
+        layout:
+          type: string
+          enum: ["left_text_right_visual", "centered_manifesto", "poster_text", "split_panel"]
+        brand:
+          type: string
+          enum: ["full_lockup", "symbol_only", "wordmark_only", "none"]
+          default: "full_lockup"
+        brandPosition:
+          type: string
+          enum: ["bottom-left", "bottom-right", "top-left", "top-right"]
+          default: "bottom-left"
+        asset:
+          type: string
+          enum: ["system-field", "orbit-dotted", "fragmented-network", "ordered-network", "force-map", "handshake-trust", "none"]
+        textSize:
+          $ref: "#/components/schemas/TextSizes"
+        emphasisRules:
+          type: array
+          items:
+            $ref: "#/components/schemas/EmphasisRule"
+        titleWidth:
+          type: number
+          nullable: true
+          description: Override title width as percentage
+        graphicPos:
+          $ref: "#/components/schemas/GraphicPos"
+
+    TextSizes:
+      type: object
+      properties:
+        title:
+          type: integer
+          default: 0
+        body:
+          type: integer
+          default: 0
+        kicker:
+          type: integer
+          default: 0
+        footer:
+          type: integer
+          default: 0
+
+    EmphasisRule:
+      type: object
+      required:
+        - field
+        - target
+        - device
+      properties:
+        id:
+          type: string
+          description: Auto-generated if missing
+        field:
+          type: string
+          enum: ["title", "body", "kicker", "footerMeta"]
+          description: Which text field the rule targets
+        target:
+          type: string
+          description: Substring to find in the field text (case-insensitive)
+        device:
+          type: string
+          enum: ["underline_pop", "italic_pop", "strike_muted", "outline", "filled_highlight", "plain_orange"]
+        default:
+          type: boolean
+          default: false
+
+    GraphicPos:
+      type: object
+      nullable: true
+      description: Override graphic asset position (percentages). Null = use layout defaults.
+      properties:
+        x:
+          type: number
+        y:
+          type: number
+        size:
+          type: number
+
+    ValidateRequest:
+      type: object
+      required:
+        - config
+      properties:
+        config:
+          $ref: "#/components/schemas/VisualConfig"
+
+    ValidateResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+                description: "JSON path, e.g. slides.1.theme"
+              message:
+                type: string
+        warnings:
+          type: array
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+              message:
+                type: string
+        normalizedConfig:
+          $ref: "#/components/schemas/VisualConfig"
+
+    CreateSessionRequest:
+      type: object
+      required:
+        - config
+      properties:
+        config:
+          $ref: "#/components/schemas/VisualConfig"
+
+    UpdateSessionRequest:
+      type: object
+      required:
+        - config
+      properties:
+        config:
+          $ref: "#/components/schemas/VisualConfig"
+
+    SessionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 32-char hex UUID
+        url:
+          type: string
+          description: Full URL to open the visual editor with this session
+        status:
+          type: string
+          enum: ["draft", "approved"]
+        config:
+          $ref: "#/components/schemas/VisualConfig"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UpdateSessionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+
+    SchemaDescriptor:
+      type: object
+      properties:
+        version:
+          type: string
+        defaults:
+          type: object
+          properties:
+            global:
+              $ref: "#/components/schemas/GlobalConfig"
+            slide:
+              type: object
+        enums:
+          type: object
+          description: All valid enum values for each field
+          properties:
+            canvas:
+              type: array
+              items:
+                type: string
+            status:
+              type: array
+              items:
+                type: string
+            role:
+              type: array
+              items:
+                type: string
+            theme:
+              type: array
+              items:
+                type: string
+            layout:
+              type: array
+              items:
+                type: string
+            brand:
+              type: array
+              items:
+                type: string
+            brandPosition:
+              type: array
+              items:
+                type: string
+            style:
+              type: array
+              items:
+                type: string
+            asset:
+              type: array
+              items:
+                type: string
+            emphasisDevice:
+              type: array
+              items:
+                type: string
+            emphasisField:
+              type: array
+              items:
+                type: string
+        requiredFields:
+          type: object
+        optionalFields:
+          type: object
+        guidance:
+          type: object
+          properties:
+            description:
+              type: string
+            workflow:
+              type: array
+              items:
+                type: string
+            notes:
+              type: array
+              items:
+                type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+              message:
+                type: string

@@ -1,0 +1,38 @@
+{
+  "global": {
+    "canvas": "1080x1350",
+    "accent": "#FF3D00",
+    "name": "demo-agent-test"
+  },
+  "slides": {
+    "1": {
+      "role": "opener",
+      "title": "Common ground for bold minds.",
+      "body": "Non un coworking. Non un incubatore. Uno spazio dove le persone rumorose trovano il loro posto.",
+      "style": "Manifesto",
+      "theme": "light",
+      "layout": "poster_text",
+      "asset": "system-field",
+      "emphasisRules": [
+        { "field": "title", "target": "bold minds", "device": "italic_pop", "default": true }
+      ]
+    },
+    "2": {
+      "role": "content",
+      "title": "Una selezione rigorosa.",
+      "body": "Qualità sopra quantità. Sempre.",
+      "style": "Editorial",
+      "layout": "left_text_right_visual",
+      "asset": "fragmented-network"
+    },
+    "3": {
+      "role": "closing",
+      "title": "Nuove prospettive.",
+      "body": "Il futuro è già qui.",
+      "style": "Energetic",
+      "theme": "dark",
+      "layout": "centered_manifesto",
+      "asset": "ordered-network"
+    }
+  }
+}

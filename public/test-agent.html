@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Test — Traent Hub API</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'JetBrains Mono','SF Mono',monospace;background:#1a1a1a;color:#e0e0e0;padding:24px;max-width:900px;margin:0 auto}
+  h1{font-size:18px;color:#FF3D00;margin-bottom:4px}
+  h2{font-size:13px;color:#888;margin-bottom:16px;font-weight:400}
+  .step{background:#242424;border:1px solid #333;border-radius:8px;padding:16px;margin-bottom:12px}
+  .step-num{color:#FF3D00;font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+  .step-title{font-size:14px;font-weight:600;margin-bottom:8px}
+  pre{background:#111;border:1px solid #333;border-radius:6px;padding:12px;overflow:auto;font-size:12px;max-height:300px;line-height:1.5}
+  .response{margin-top:8px}
+  .response.ok pre{border-color:#2d6a2d}
+  .response.err pre{border-color:#a82a2a}
+  button{background:#FF3D00;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-family:inherit;cursor:pointer;margin-top:8px}
+  button:hover{background:#e03600}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  textarea{width:100%;background:#111;border:1px solid #333;border-radius:6px;color:#e0e0e0;font-family:inherit;font-size:12px;padding:12px;min-height:120px;resize:vertical}
+  textarea:focus{outline:none;border-color:#FF3D00}
+  .status{font-size:11px;margin-top:4px}
+  .ok{color:#4caf50}.err{color:#f44336}.warn{color:#ff9800}
+  a{color:#FF3D00}
+  label{font-size:12px;color:#888;display:block;margin-bottom:4px}
+  .row{display:flex;gap:8px;align-items:flex-end}
+  .row input{flex:1;background:#111;border:1px solid #333;border-radius:6px;color:#e0e0e0;font-family:inherit;font-size:12px;padding:8px}
+  .row input:focus{outline:none;border-color:#FF3D00}
+  .log{font-size:11px;color:#666;margin-top:16px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+
+<h1>🤖 Agent Test — Traent Hub Visual API</h1>
+<h2>Simula quello che farebbe un GPT Action: leggi schema → valida config → crea sessione</h2>
+
+<div class="step">
+  <div class="step-num">Step 1</div>
+  <div class="step-title">Leggi lo schema corrente</div>
+  <button id="btnSchema">GET /api/schema</button>
+  <div id="resSchema" class="response"></div>
+</div>
+
+<div class="step">
+  <div class="step-num">Step 2</div>
+  <div class="step-title">Config JSON (modifica o incolla la tua)</div>
+  <textarea id="configInput"></textarea>
+  <button id="btnValidate">POST /api/configs/validate</button>
+  <div id="resValidate" class="response"></div>
+</div>
+
+<div class="step">
+  <div class="step-num">Step 3</div>
+  <div class="step-title">Crea sessione (serve API key)</div>
+  <div class="row">
+    <div style="flex:1"><label>API Key</label><input id="apiKey" value="dev-local-key" /></div>
+    <button id="btnCreate">POST /api/configs</button>
+  </div>
+  <div id="resCreate" class="response"></div>
+</div>
+
+<div class="step">
+  <div class="step-num">Step 4</div>
+  <div class="step-title">Apri la sessione nel configuratore</div>
+  <div id="sessionUrl" style="font-size:14px;padding:8px;color:#888">— nessuna sessione creata —</div>
+</div>
+
+<div id="log" class="log"></div>
+
+<script>
+const BASE = location.origin;
+const $ = id => document.getElementById(id);
+
+function log(msg) { $('log').textContent += msg + '\n'; }
+function showResult(el, status, data) {
+  const cls = status >= 200 && status < 300 ? 'ok' : 'err';
+  el.className = 'response ' + cls;
+  const label = document.createElement('div');
+  el.innerHTML = '';
+  el.appendChild(label);
+  label.className = 'status ' + cls;
+  label.textContent = 'HTTP ' + status;
+  const pre = document.createElement('pre');
+  pre.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  el.appendChild(pre);
+}
+
+async function api(method, path, body, key) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (key) headers['Authorization'] = 'Bearer ' + key;
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  log(method + ' ' + path + (body ? ' (' + JSON.stringify(body).length + ' bytes)' : ''));
+  const r = await fetch(BASE + path, opts);
+  const json = await r.json().catch(() => r.text());
+  log('→ HTTP ' + r.status);
+  return { status: r.status, data: json };
+}
+
+// Default config
+$('configInput').value = JSON.stringify({
+  config: {
+    global: { canvas: "1080x1350", accent: "#FF3D00", name: "agent-test" },
+    slides: {
+      "1": {
+        role: "opener",
+        title: "Common ground for bold minds.",
+        body: "Non un coworking. Non un incubatore. Uno spazio dove le persone rumorose trovano il loro posto.",
+        style: "Manifesto",
+        theme: "light",
+        layout: "poster_text",
+        asset: "system-field",
+        emphasisRules: [
+          { field: "title", target: "bold minds", device: "italic_pop", default: true }
+        ]
+      },
+      "2": {
+        role: "content",
+        title: "Una selezione rigorosa.",
+        body: "Qualità sopra quantità. Sempre.",
+        style: "Editorial",
+        layout: "left_text_right_visual",
+        asset: "fragmented-network"
+      },
+      "3": {
+        role: "closing",
+        title: "Nuove prospettive.",
+        body: "Il futuro è già qui.",
+        style: "Energetic",
+        theme: "dark",
+        layout: "centered_manifesto",
+        asset: "ordered-network"
+      }
+    }
+  }
+}, null, 2);
+
+// Step 1: Schema
+$('btnSchema').addEventListener('click', async () => {
+  const { status, data } = await api('GET', '/api/schema');
+  showResult($('resSchema'), status, data);
+  log('Enums: ' + Object.keys(data.enums).join(', '));
+});
+
+// Step 2: Validate
+$('btnValidate').addEventListener('click', async () => {
+  let body;
+  try { body = JSON.parse($('configInput').value); } catch(e) {
+    showResult($('resValidate'), 0, 'Invalid JSON: ' + e.message);
+    return;
+  }
+  const { status, data } = await api('POST', '/api/configs/validate', body);
+  showResult($('resValidate'), status, data);
+  if (data.valid) log('✅ Config valid, ' + Object.keys(data.normalizedConfig.slides).length + ' slides normalized');
+  else data.errors.forEach(e => log('❌ ' + e.path + ': ' + e.message));
+});
+
+// Step 3: Create session
+$('btnCreate').addEventListener('click', async () => {
+  let body;
+  try { body = JSON.parse($('configInput').value); } catch(e) {
+    showResult($('resCreate'), 0, 'Invalid JSON: ' + e.message);
+    return;
+  }
+  const key = $('apiKey').value.trim();
+  if (!key) { showResult($('resCreate'), 0, 'API key required'); return; }
+  const { status, data } = await api('POST', '/api/configs', body, key);
+  showResult($('resCreate'), status, data);
+  if (status === 201 && data.url) {
+    log('✅ Session created: ' + data.id);
+    $('sessionUrl').innerHTML = '<a href="' + data.url + '" target="_blank" style="font-size:14px">👉 ' + data.url + '</a>';
+  } else {
+    log('❌ Failed: ' + (data.error || data.message || 'unknown'));
+  }
+});
+
+log('Ready. BASE=' + BASE);
+</script>
+</body>
+</html>
