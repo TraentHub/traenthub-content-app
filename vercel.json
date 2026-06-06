@@ -1,4 +1,5 @@
 {
+  "buildCommand": null,
   "headers": [
     {
       "source": "/api/:path*",
