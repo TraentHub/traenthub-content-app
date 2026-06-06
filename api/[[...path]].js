@@ -114,7 +114,8 @@ function getStore() {
 
 function requireApiKey(req) {
   const apiKey = process.env.TRAENT_API_KEY;
-  if (!apiKey) return { ok: false, reason: 'TRAENT_API_KEY not configured' };
+  // If no key is configured, skip auth (open mode)
+  if (!apiKey) return { ok: true };
   const auth = req.headers['authorization'] || '';
   if (auth === 'Bearer ' + apiKey) return { ok: true };
   return { ok: false, reason: 'Invalid API key' };

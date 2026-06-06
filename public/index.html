@@ -1285,16 +1285,16 @@ async function apiUpdateSession(id,config){
   return r.json();
 }
 function sessionApiKey(){
-  // For POC: API key could be embedded or passed via URL param.
-  // In production, this would come from a signed session or server-side rendering.
+  // 1. URL param ?key= takes highest priority
   const param=new URLSearchParams(location.search).get('key');
-  if(param) return param;
-  // Fallback: prompt only in development (localhost)
-  if(location.hostname==='localhost'||location.hostname==='127.0.0.1'){
-    if(!window._traentApiKey) window._traentApiKey=prompt('API Key (TRAENT_API_KEY):','dev-local-key')||'';
-    return window._traentApiKey;
-  }
-  return '';
+  if(param){localStorage.setItem('traent_api_key',param);return param;}
+  // 2. Check localStorage (persisted from previous prompt or URL param)
+  const stored=localStorage.getItem('traent_api_key');
+  if(stored) return stored;
+  // 3. Prompt the user (works on all origins, persisted to localStorage)
+  const key=prompt('Enter API Key (leave empty if none is configured):')||'';
+  localStorage.setItem('traent_api_key',key);
+  return key;
 }
 
 function loadConfigFromSessionParam(){
@@ -1323,7 +1323,12 @@ async function saveSession(){
       window.history.replaceState({},'',new URL(url).search);
       setImportMessage("Session created",true);
     }catch(e){
-      setImportMessage("Create failed: "+e.message,false);
+      if(e.message.includes('Unauthorized')||e.message.includes('API key')){
+        localStorage.removeItem('traent_api_key');
+        setImportMessage("Invalid API key — click again to re-enter",false);
+      }else{
+        setImportMessage("Create failed: "+e.message,false);
+      }
     }
   }else{
     try{
