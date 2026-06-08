@@ -117,9 +117,8 @@ async function handleScreenshot(req, res) {
   const origin = req.headers['origin'] || '';
   setCORS(res, origin);
 
-  if (!checkApiKey(req)) {
-    return json(res, 401, { error: 'Unauthorized — invalid or missing API key' });
-  }
+  // Note: screenshot endpoint is open (no API key required)
+  // matches the original server.js behavior where only /api/configs required auth
 
   try {
     const body = await readBody(req);
