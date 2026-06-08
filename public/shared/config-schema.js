@@ -17,7 +17,23 @@
   // ── Constants ──────────────────────────────────────────────────────────
 
   var VERSION = "stable-import-fix";
-  var TRAENT_ORANGE = "#FF3D00";
+
+  // ── Brand Defaults (overridden by configureBrand) ──────────────────────
+
+  var _brand = {
+    accentColor: "#FF3D00",
+    defaultKicker: "TRAENT HUB",
+    defaultFooterMeta: "visual config",
+  };
+
+  function configureBrand(cfg) {
+    if (!cfg) return;
+    if (cfg.accentColor) _brand.accentColor = cfg.accentColor;
+    if (cfg.defaultKicker) _brand.defaultKicker = cfg.defaultKicker;
+    if (cfg.defaultFooterMeta) _brand.defaultFooterMeta = cfg.defaultFooterMeta;
+  }
+
+  var TRAENT_ORANGE = _brand.accentColor; // legacy alias
 
   // ── Enumerations ───────────────────────────────────────────────────────
   // Derived from the real HTML <select> controls and JS registries in index.html.
@@ -101,8 +117,8 @@
     return {
       role: index === 0 ? "opener" : "content",
       status: "draft",
-      kicker: "TRAENT HUB",
-      footerMeta: "visual config",
+      kicker: _brand.defaultKicker,
+      footerMeta: _brand.defaultFooterMeta,
       title: "",
       body: "",
       style: index === 0 ? "Manifesto" : "Editorial",
@@ -149,7 +165,7 @@
 
     cfg.version = cfg.version || VERSION;
     cfg.global.canvas = cfg.global.canvas || "1080x1350";
-    cfg.global.accent = cfg.global.accent || TRAENT_ORANGE;
+    cfg.global.accent = cfg.global.accent || _brand.accentColor;
     cfg.global.name = cfg.global.name || "";
     // Preserve lightSlideBackground if present, do not overwrite
     // (used by buildHtmlDeck, not part of normalization defaults)
@@ -474,7 +490,7 @@
 
   return {
     VERSION: VERSION,
-    TRAENT_ORANGE: TRAENT_ORANGE,
+    TRAENT_ORANGE: _brand.accentColor,
     ENUMS: ENUMS,
     defaultTextSizes: defaultTextSizes,
     defaultGlobal: defaultGlobal,
@@ -484,5 +500,6 @@
     validateConfig: validateConfig,
     generateSessionId: generateSessionId,
     getSchemaDescriptor: getSchemaDescriptor,
+    configureBrand: configureBrand,
   };
 });

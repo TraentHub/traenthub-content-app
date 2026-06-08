@@ -1,0 +1,75 @@
+{
+  "brand": {
+    "name": "Traent Hub",
+    "slug": "traent-hub"
+  },
+
+  "colors": {
+    "accent": "#FF3D00",
+    "paper": "#F5F2ED",
+    "ink": "#0D0D0D",
+    "secondary": "#EDE9E1",
+    "grayDark": "#6B6559",
+    "grayMid": "#8A8478",
+    "grayLight": "#B8B2A7",
+    "dark": "#0D0D0D",
+    "stage": "#D8D3CC",
+    "lightSlideBg": "#F5F2ED",
+    "line": "#DDDAD5"
+  },
+
+  "fonts": {
+    "display": { "family": "Playfair Display", "weights": [500, 600, 700], "italics": true },
+    "body":    { "family": "Outfit", "weights": [400, 500, 600, 700], "italics": false },
+    "mono":    { "family": "JetBrains Mono", "weights": [400, 500, 600], "italics": false }
+  },
+
+  "logos": {
+    "dark": "data:image/png;base64,PLACEHOLDER_SEE_INDEX_HTML_LOGO_DARK",
+    "light": "data:image/png;base64,PLACEHOLDER_SEE_INDEX_HTML_LOGO_LIGHT"
+  },
+
+  "wordmark": {
+    "html": "traent<span class=\"dot\">.</span>hub",
+    "textTransform": "lowercase"
+  },
+
+  "defaults": {
+    "kicker": "TRAENT HUB",
+    "footerMeta": "visual config"
+  },
+
+  "styleMeta": {
+    "Manifesto": {
+      "desc": "Poster logic, grande claim tipografico, forte presenza editoriale.",
+      "preview": "Non cerchiamo\nspazi."
+    },
+    "Editorial": {
+      "desc": "Più bilanciato, leggibile, claim + supporto + asset pulito.",
+      "preview": "Una selezione\nrigorosa."
+    },
+    "Energetic": {
+      "desc": "Più contrastato, adatto per launch, event, closing slide.",
+      "preview": "Nuove\nprospettive."
+    },
+    "Institutional-light": {
+      "desc": "Sobrio, ordinato, per contesti informativi e istituzionali.",
+      "preview": "Se sei qui,\nSignifica qualcosa."
+    }
+  },
+
+  "emphasisDevices": {
+    "underline_pop":      { "label": "Underline accent" },
+    "italic_pop":         { "label": "Italic accent" },
+    "strike_muted":       { "label": "Strikethrough" },
+    "outline":            { "label": "Outline" },
+    "filled_highlight":   { "label": "Filled highlight" },
+    "plain_orange":       { "label": "Plain accent" }
+  },
+
+  "sampleContent": {
+    "title": "Non cerchiamo spazi silenziosi. Cerchiamo persone rumorose.",
+    "body": "Una preview dimostrativa. Il GPT userà il copy approvato e questa configurazione per generare le slide finali.",
+    "kicker": "TRAENT HUB"
+  }
+}
