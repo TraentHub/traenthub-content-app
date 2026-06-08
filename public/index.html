@@ -65,7 +65,7 @@ body{overflow:auto}
 .controls-scroll{min-height:0;overflow-y:auto;overflow-x:hidden;padding:16px;display:grid;gap:16px;align-content:start}
 .controls-footer{border-top:1px solid var(--line);padding:16px;background:var(--paper);display:flex;gap:8px;flex-wrap:wrap}
 .filmstrip{min-height:118px;background:rgba(255,255,255,.5);border:1px solid var(--line);border-radius:8px;padding:8px;overflow-x:auto;display:flex;gap:8px}
-.film-item{width:170px;flex:0 0 170px;border:1px solid transparent;border-radius:8px;background:rgba(245,242,237,.9);padding:8px;cursor:pointer;transition:.16s ease}
+.film-item{width:170px;flex:0 0 170px;border:1px solid var(--line);border-radius:8px;background:rgba(245,242,237,.9);padding:8px;cursor:pointer;transition:.16s ease;box-shadow:0 2px 8px rgba(0,0,0,.08)}
 .film-item:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,.1)}
 .film-item.active{border-color:var(--pop);box-shadow:0 0 0 2px rgba(255,61,0,.12) inset}
 .film-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--gray-d);text-transform:uppercase;letter-spacing:.08em}
@@ -191,24 +191,9 @@ body[data-canvas="1080x1350"] .preview-stage-inner{width:min(86%,760px)}
 .brand-wordmark_only .logo-symbol{display:none}
 .brand-none .brand-lockup{display:none}
 
-.film-thumb .top-brand{top:5%;gap:4px}
-.film-thumb .brand-pos-top-left .top-brand{left:7.5%}
-.film-thumb .brand-pos-top-right .top-brand{right:7.5%}
-.film-thumb .brand-pos-top-left .kicker,
-.film-thumb .brand-pos-top-right .kicker{font-size:4.4px;top:0;max-width:50%}
-.film-thumb .brand-pos-top-left .title-wrap,
-.film-thumb .brand-pos-top-right .title-wrap{padding-top:7%}
-
-.film-thumb .slide{box-shadow:none}
-.film-thumb .content{left:7.5%;right:7.5%;top:7.5%;bottom:14%}
-.film-thumb .kicker{font-size:4.6px;gap:4px;letter-spacing:.15em}
-.film-thumb .title{font-size:var(--thumb-title-size,17px);line-height:.95;letter-spacing:-.035em;max-width:94%}
-.film-thumb .body{font-size:5px;line-height:1.18;max-width:70%;margin-top:4px}
-.film-thumb .footer{left:7.5%;right:7.5%;bottom:5%;min-height:8px}
-.film-thumb .footer-meta{font-size:4px;letter-spacing:.06em}
-.film-thumb .logo-symbol{height:7px}
-.film-thumb .wordmark{font-size:5.5px}
-.film-thumb .graphic{opacity:.18}
+/* Filmstrip thumbnails: render at full canvas size, scale down with transform */
+.film-thumb{position:relative;width:100%;aspect-ratio:var(--ratio);overflow:hidden;border-radius:4px}
+.film-thumb .slide{position:absolute;left:0;top:0;width:var(--canvas-w,1080px) !important;height:var(--canvas-h,1350px) !important;max-width:none !important;max-height:none !important;aspect-ratio:auto !important;transform:scale(var(--thumb-scale,.14));transform-origin:top left;box-shadow:none}
 
 .preview-stage .kicker{font-size:calc(18px * var(--kicker-scale,1));gap:18px}
 .preview-stage .body{font-size:calc(34px * var(--body-scale,1));line-height:1.34;margin-top:34px}
@@ -540,8 +525,7 @@ const EMPHASIS_DEVICES = {
     cssDark:`.dark .em-outline{--outline-color:var(--paper)}`,
     cssLight:`.slide:not(.dark) .em-outline{--outline-color:var(--ink)}`,
     cssPreview:`.preview-stage .title .em-outline{-webkit-text-stroke-width:3px;text-stroke-width:3px}`,
-    cssThumb:`.film-thumb .em-outline{-webkit-text-stroke-width:.55px;text-stroke-width:.55px}`
-  },
+    cssThumb:``  },
   "filled_highlight":{
     label:"Filled highlight",
     css:`.em-filled_highlight{display:inline;background:var(--pop);color:var(--paper);padding:.1em .18em;border-radius:3px;-webkit-box-decoration-break:clone;box-decoration-break:clone}`
@@ -698,12 +682,11 @@ function titleBaseForCanvas(canvas){
 
 function fitTitles(){
   document.querySelectorAll(".slide .title").forEach(title=>{
-    const wrap=title.closest(".title-wrap"), inThumb=!!title.closest(".film-thumb");
-    let base=inThumb ? 17 : titleBaseForCanvas(state.global.canvas);
-    
+    const wrap=title.closest(".title-wrap");
+    let base=titleBaseForCanvas(state.global.canvas);
     const slide=title.closest(".slide");
     if(slide.classList.contains("layout-poster_text")) base*=1.06;
-    if(!inThumb) base*=scale(title.dataset.size||0);
+    base*=scale(title.dataset.size||0);
     title.style.setProperty("--title-size", base+"px");
     let i=0; while((title.scrollHeight>wrap.clientHeight*1.015||title.scrollWidth>wrap.clientWidth*1.015)&&i<48){ base*=.975; title.style.setProperty("--title-size", base+"px"); i++; }
   });
@@ -716,11 +699,14 @@ function renderMainPreview(){
 }
 function renderFilmstrip(){
   const root=$("filmstrip");
+  const canvas=state.global.canvas||"1080x1350";
+  const[cw,ch]=canvas.split("x").map(Number);
+  const thumbScale=(154/cw).toFixed(4);
   root.innerHTML=Object.keys(state.slides).map(id=>{
     const s=state.slides[id];
     return `<div class="film-item ${$("slide").value===id?'active':''}" data-slide="${id}">
       <div class="film-meta"><span>Slide ${id}</span><span class="status-dot status-${s.status||'draft'}">${(s.status||'draft').replace('_',' ')}</span></div>
-      <div class="film-thumb"><article class="slide ${s.theme} layout-${s.layout} brand-${s.brand} brand-pos-${s.brandPosition||'bottom-left'}">${slideMarkup(s,true)}</article></div>
+      <div class="film-thumb" style="--thumb-scale:${thumbScale};--canvas-w:${cw}px;--canvas-h:${ch}px"><article class="slide ${s.theme} layout-${s.layout} brand-${s.brand} brand-pos-${s.brandPosition||'bottom-left'}">${slideMarkup(s,true)}</article></div>
     </div>`;
   }).join("");
   root.querySelectorAll(".film-item").forEach(item=>item.addEventListener("click",()=>{$("slide").value=item.dataset.slide; setUi(); render();}));
