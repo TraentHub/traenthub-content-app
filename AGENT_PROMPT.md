@@ -78,7 +78,7 @@ const BRAND = {
   localStoragePrefix: brand.slug,
   fileNamePrefix: brand.slug + "-visual-config",
   renderedDeckTitle: brand.name + " Rendered Deck",
-  sampleConfigUrl: "public/sample-" + brand.slug + "-visual-config.json"
+  sampleConfigUrl: brand.slug + "-visual-config.json"
 };
 ```
 
@@ -141,3 +141,19 @@ After substitution, verify ALL of the following:
 - The `config-schema.js` module should NOT be modified — it receives brand config at runtime via `configureBrand()`
 - Keep the single-file architecture — no build step, no external CSS/JS files (except `config-schema.js` and the sample config)
 - The `none` asset (no decorative graphic) is universal and should always be available
+
+## Common mistakes to avoid
+
+These are bugs we hit during development. Do NOT make these mistakes:
+
+1. **CSS delimiters must be INSIDE `<style>` tag** — The `/* ╔══ BRAND CSS VARIABLES */` block must be inside the existing `<style>...</style>` element. Do NOT place it outside or create a duplicate.
+
+2. **Static HTML topbar wordmark must be literal text** — There is a `<div class="brand">` in the static HTML (near line 310, inside the topbar). This is plain HTML, NOT a JavaScript template literal. The wordmark must be written as literal HTML like `<span class="wordmark dark">brand<span class="dot">.</span>name</span>`. Do NOT use `${BRAND.wordmarkHtml}` here — it would render as literal text.
+
+3. **`sampleConfigUrl` must NOT have `public/` prefix** — The server serves files from `public/` as root, so the URL should be `"slug-visual-config.json"`, NOT `"public/slug-visual-config.json"`.
+
+4. **Do NOT create `const X.Y = ...` declarations** — When replacing `TRAENT_ORANGE`, the original `const TRAENT_ORANGE = "..."` line has already been removed. Do NOT reintroduce it or create invalid JS like `const BRAND.accentColor = ...`.
+
+5. **Ensure `LOGO_DARK` / `LOGO_LIGHT` are on their own lines** — After the `configureBrand()` call and before `STYLE_META`, make sure each logo constant starts on a new line. Do NOT merge them onto the same line as other statements.
+
+6. **Google Fonts `<link>` in `buildHtmlDeck()`** — There is a SECOND Google Fonts URL inside the `buildHtmlDeck()` function (around the `fonts=[` array). This must also be updated to match the new brand fonts, using a lighter subset (weights 400, 600, 700 only).

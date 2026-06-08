@@ -25,8 +25,8 @@
   },
 
   "logos": {
-    "dark": "data:image/png;base64,PLACEHOLDER_SEE_INDEX_HTML_LOGO_DARK",
-    "light": "data:image/png;base64,PLACEHOLDER_SEE_INDEX_HTML_LOGO_LIGHT"
+    "dark": "data:image/png;base64,COPY_FROM_INDEX_HTML_LOGO_DARK_CONSTANT",
+    "light": "data:image/png;base64,COPY_FROM_INDEX_HTML_LOGO_LIGHT_CONSTANT"
   },
 
   "wordmark": {
