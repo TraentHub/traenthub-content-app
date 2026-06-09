@@ -102,7 +102,7 @@
   // ── Defaults ───────────────────────────────────────────────────────────
 
   function defaultTextSizes() {
-    return { title: 0, body: 0, kicker: 0, footer: 0 };
+    return { title: 0, body: 0, kicker: 0, footer: 0, logo: 0, wordmark: 0 };
   }
 
   function defaultGlobal() {
