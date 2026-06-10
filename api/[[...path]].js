@@ -202,6 +202,15 @@ async function handleApiRoute(req, res) {
     const store = await getStore();
     const body = req.body || {};
 
+    // GET /api/debug
+    if (method === 'GET' && (url === '/debug' || url === '/api/debug')) {
+      return res.status(200).json({
+        store: process.env.REDIS_URL ? 'redis' : 'memory',
+        redisUrlSet: !!process.env.REDIS_URL,
+        redisUrlPrefix: process.env.REDIS_URL ? process.env.REDIS_URL.slice(0, 20) + '…' : null,
+      });
+    }
+
     // GET /api/schema
     if (method === 'GET' && (url === '/schema' || url === '/api/schema')) {
       return res.status(200).json(Schema.getSchemaDescriptor());
