@@ -5,20 +5,25 @@
 const Schema = require('../public/shared/config-schema.js');
 
 // ── Storage ────────────────────────────────────────────────────────────────
-// Uses Upstash Redis when UPSTASH_REDIS_REST_URL is set (production).
+// Uses Vercel Redis (node-redis) when REDIS_URL is set (production).
 // Falls back to in-memory store for local development.
 
-function createUpstashStore() {
-  const { Redis } = require('@upstash/redis');
-  const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN,
-  });
+function createRedisStore() {
+  const { createClient } = require('redis');
+  let _client = null;
+
+  async function client() {
+    if (_client && _client.isReady) return _client;
+    _client = createClient({ url: process.env.REDIS_URL });
+    _client.on('error', err => console.error('Redis error:', err));
+    await _client.connect();
+    return _client;
+  }
 
   return {
     async create(session) {
-      await redis.sadd('sessions:index', session.id);
-      await redis.set('session:' + session.id, JSON.stringify({
+      const c = await client();
+      await c.set('session:' + session.id, JSON.stringify({
         id: session.id,
         status: session.status,
         config: JSON.stringify(session.config),
@@ -28,9 +33,10 @@ function createUpstashStore() {
       return session;
     },
     async get(id) {
-      const raw = await redis.get('session:' + id);
+      const c = await client();
+      const raw = await c.get('session:' + id);
       if (!raw) return null;
-      const row = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const row = JSON.parse(raw);
       return {
         id: row.id,
         status: row.status,
@@ -49,7 +55,8 @@ function createUpstashStore() {
         createdAt: existing.createdAt,
         updatedAt: new Date().toISOString(),
       };
-      await redis.set('session:' + id, JSON.stringify(updated));
+      const c = await client();
+      await c.set('session:' + id, JSON.stringify(updated));
       return {
         id: updated.id,
         status: updated.status,
@@ -59,21 +66,14 @@ function createUpstashStore() {
       };
     },
     async list() {
-      // SCAN all session:* keys — handles sessions created before index tracking
-      let cursor = 0;
-      const keys = [];
-      do {
-        const result = await redis.scan(cursor, { match: 'session:*', count: 100 });
-        cursor = Number(result[0]);
-        keys.push(...result[1]);
-      } while (cursor !== 0);
+      const c = await client();
+      const keys = await c.keys('session:*');
       if (!keys.length) return [];
-      const ids = keys.map(k => k.replace('session:', ''));
-      const raws = await Promise.all(ids.map(id => redis.get('session:' + id)));
+      const raws = await c.mGet(keys);
       return raws
         .filter(Boolean)
         .map(raw => {
-          const row = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          const row = JSON.parse(raw);
           const config = typeof row.config === 'string' ? JSON.parse(row.config) : row.config;
           return {
             id: row.id,
@@ -86,8 +86,8 @@ function createUpstashStore() {
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     },
     async delete(id) {
-      await redis.del('session:' + id);
-      await redis.srem('sessions:index', id);
+      const c = await client();
+      await c.del('session:' + id);
       return { id };
     },
   };
@@ -157,7 +157,7 @@ function createMemoryStore() {
 let _store = null;
 function getStore() {
   if (!_store) {
-    _store = process.env.UPSTASH_REDIS_REST_URL ? createUpstashStore() : createMemoryStore();
+    _store = process.env.REDIS_URL ? createRedisStore() : createMemoryStore();
   }
   return _store;
 }

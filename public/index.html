@@ -1169,6 +1169,7 @@ function bindGraphicSliders(){
 // localStorage preferences + autosave
 const PREFS_KEY = BRAND.localStoragePrefix + "-prefs";
 const AUTOSAVE_KEY = BRAND.localStoragePrefix + "-autosave";
+const SESSION_ID_KEY = BRAND.localStoragePrefix + "-session-id";
 
 function savePreferences(){
   const ind=$("autosaveIndicator");
@@ -1283,6 +1284,7 @@ function loadConfigFromSessionParam(){
   apiLoadConfig(id).then(cfg=>{
     state={version:cfg.version||"stable-import-fix",global:cfg.global,slides:cfg.slides};
     currentSessionId=id;
+    localStorage.setItem(SESSION_ID_KEY,id);
     rebuildSlideOptions();
     setUi();
     render();
@@ -1347,6 +1349,20 @@ function _storedApiKey(){
 
 async function autoCreateSession(){
   if(currentSessionId) return;
+  // Try to resume the last known session before creating a new one
+  const savedId=localStorage.getItem(SESSION_ID_KEY);
+  if(savedId){
+    try{
+      const r=await fetch(`/api/configs/${encodeURIComponent(savedId)}`);
+      if(r.ok){
+        currentSessionId=savedId;
+        window.history.replaceState({},'','?id='+savedId);
+        updateSaveBtn();
+        return;
+      }
+      localStorage.removeItem(SESSION_ID_KEY);
+    }catch(e){}
+  }
   try{
     const r=await fetch('/api/configs',{
       method:'POST',
@@ -1356,6 +1372,7 @@ async function autoCreateSession(){
     if(!r.ok) return;
     const result=await r.json();
     currentSessionId=result.id;
+    localStorage.setItem(SESSION_ID_KEY,result.id);
     window.history.replaceState({},'','?id='+result.id);
     updateSaveBtn();
   }catch(e){}
@@ -1414,6 +1431,7 @@ async function openSession(id){
     const cfg=normalizeImportedConfig(row.config);
     state={version:cfg.version||'stable-import-fix',global:cfg.global,slides:cfg.slides};
     currentSessionId=id;
+    localStorage.setItem(SESSION_ID_KEY,id);
     window.history.replaceState({},'','?id='+id);
     rebuildSlideOptions();setUi();render();updateSaveBtn();
     setView('focus');
@@ -1439,6 +1457,7 @@ async function deleteSession(id){
     if(!r.ok) throw new Error((await r.json()).error||await r.text());
     if(id===currentSessionId){
       currentSessionId=null;
+      localStorage.removeItem(SESSION_ID_KEY);
       window.history.replaceState({},'','/');
       updateSaveBtn();
       autoCreateSession();
@@ -1461,7 +1480,16 @@ function autoSaveSession(){
       setTimeout(()=>{if(indicator)indicator.textContent=currentSessionId?"Session: "+currentSessionId.slice(0,8)+"…":"";},1500);
       const sv=$("sessionsView"); if(sv&&sv.style.display!=="none") renderSessionsList();
     }catch(e){
-      if(indicator) indicator.textContent="Save failed";
+      if(e.message==='Not found'){
+        // Session no longer exists — silently recreate
+        localStorage.removeItem(SESSION_ID_KEY);
+        currentSessionId=null;
+        window.history.replaceState({},'','/');
+        updateSaveBtn();
+        autoCreateSession();
+      }else{
+        if(indicator) indicator.textContent="Save failed: "+e.message.slice(0,40);
+      }
     }
     _autoSaving=false;
   },500);
