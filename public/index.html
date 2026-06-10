@@ -9,6 +9,7 @@
   <link rel="icon" type="image/svg+xml" id="appFavicon" href="th-logo-symbol-dark.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Playfair+Display:ital,wght@0,700;1,700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 
 <style>
 /* ╔══ BRAND CSS VARIABLES — Replace for a new brand ══ */
@@ -818,23 +819,28 @@ function buildHtmlDeck(){
   ].join("");
   // Override accent + light-slide bg; keep all vw-based font sizes unchanged
   const overrides=`:root{--pop:${accent};--slide-paper:${lightBg};--paper:${lightBg}}`;
-  // Minimal viewer layout – no cqw/container-query overrides
+  // Viewer layout: render each slide at exact canvas px (like focus view/filmstrip)
   const viewer=[
     `body{padding:40px 32px;box-sizing:border-box}`,
     `.deck{display:flex;flex-direction:column;gap:36px;max-width:${cw}px;margin:0 auto}`,
     `.slide-wrap{display:flex;flex-direction:column;gap:6px}`,
     `.slide-lbl{font-size:11px;color:#888;font-family:'Outfit',sans-serif;letter-spacing:.06em;text-transform:uppercase}`,
-    `.slide{border-radius:0;box-shadow:none}`,
+    `.slide-canvas{position:relative;width:100%;aspect-ratio:${cw}/${ch};overflow:hidden}`,
+    `.slide-canvas .slide{position:absolute;left:0;top:0;width:${cw}px !important;height:${ch}px !important;max-width:none !important;max-height:none !important;aspect-ratio:auto !important;transform:scale(var(--slide-fit,1));transform-origin:top left;border-radius:0;box-shadow:none}`,
   ].join("\n");
-  // Inline JS: set CSS vars + run fitTitles on load and every resize
-  // (identical logic to the app's fitTitles – ensures exact match)
+  // Inline JS: scale slides to fit their wrapper + run fitTitles at canvas px
+  // (identical fitTitles logic to the app – ensures exact match at native dims)
   const inlineJs="(function(){"+
-    "var canvas=\""+canvas+"\",acc=\""+accent+"\";"+
-    "document.documentElement.style.setProperty(\"--pop\",acc);"+
+    "var cw="+cw+",ch="+ch+";"+
+    "document.documentElement.style.setProperty(\"--pop\",\""+accent+"\");"+
     "document.documentElement.style.setProperty(\"--ratio\",\""+cw+"/"+ch+"\");"+
     "function sc(n){var v=Number(n);return(isNaN(v)||v===0)?1:Math.pow(1.12,v);}"+
-    "function tb(){if(canvas===\"1920x1080\")return 168;if(canvas===\"1600x900\")return 158;"+
-    "if(canvas===\"1080x1080\"||canvas===\"1200x1200\")return 182;if(canvas===\"1080x1920\")return 154;return 198;}"+
+    "function tb(){if(cw===1920&&ch===1080)return 168;if(cw===1600&&ch===900)return 158;"+
+    "if((cw===1080&&ch===1080)||(cw===1200&&ch===1200))return 182;if(cw===1080&&ch===1920)return 154;return 198;}"+
+    "function fitSlides(){document.querySelectorAll(\".slide-canvas\").forEach(function(c){"+
+    "var s=c.clientWidth/cw;"+
+    "var slide=c.querySelector(\".slide\");if(slide)slide.style.setProperty(\"--slide-fit\",s);"+
+    "});}"+
     "function fit(){document.querySelectorAll(\".deck .slide .title\").forEach(function(t){"+
     "var w=t.closest(\".title-wrap\");if(!w)return;"+
     "var s=t.closest(\".slide\");"+
@@ -843,9 +849,10 @@ function buildHtmlDeck(){
     "t.style.setProperty(\"--title-size\",b+\"px\");"+
     "var i=0;while((t.scrollHeight>w.clientHeight*1.015||t.scrollWidth>w.clientWidth*1.015)&&i<48){b*=0.975;t.style.setProperty(\"--title-size\",b+\"px\");i++;}"+
     "});}"+
-    "if(document.readyState===\"loading\"){document.addEventListener(\"DOMContentLoaded\",fit);}else{fit();}"+
-    "document.fonts.ready.then(function(){window.dispatchEvent(new Event('resize'));});"+
-    "window.addEventListener(\"resize\",fit);"+
+    "function onReady(){fitSlides();fit();}"+
+    "if(document.readyState===\"loading\"){document.addEventListener(\"DOMContentLoaded\",onReady);}else{onReady();}"+
+    "document.fonts.ready.then(function(){fitSlides();fit();});"+
+    "window.addEventListener(\"resize\",function(){fitSlides();fit();});"+
     "})();";
   const slides=ids.map(id=>{
     const s=state.slides[id];
@@ -853,7 +860,7 @@ function buildHtmlDeck(){
     const cls=`slide ${s.theme} layout-${s.layout} brand-${s.brand} brand-pos-${s.brandPosition||"bottom-left"}`;
     const sv=slideVars(s,false).replace(/^style="|"$/g,"");
     const lbl=`Slide ${id}${s.role?" \xb7 "+s.role:""}`;
-    return `<div class="slide-wrap"><div class="slide-lbl">${lbl}</div><article class="${cls}" style="${sv};--title-size:${fittedPx.toFixed(1)}px">${slideMarkup(s,false)}</article></div>`;
+    return `<div class="slide-wrap"><div class="slide-lbl">${lbl}</div><div class="slide-canvas"><article class="${cls}" style="${sv};--title-size:${fittedPx.toFixed(1)}px">${slideMarkup(s,false)}</article></div></div>`;
   }).join("\n");
   return ["<!DOCTYPE html>",'<html lang="it">','<head>','<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width,initial-scale=1">',
@@ -1091,6 +1098,7 @@ try {
   if($("downloadHtmlBtn")) $("downloadHtmlBtn").addEventListener("click",downloadHtmlDeck);
   if($("exportPngBtn"))    $("exportPngBtn").addEventListener("click",exportSlidePngs);
   window.addEventListener("resize",()=>{fitActivePreview();fitTitles();});
+  document.fonts.ready.then(()=>{fitTitles();});
 } catch (err) {
   document.body.insertAdjacentHTML('afterbegin', '<div style="background:#ffebe3;color:#5f210f;padding:12px 16px;font-family:monospace;position:fixed;z-index:9999;left:12px;right:12px;top:12px;border:1px solid #ff3d00;border-radius:8px;">Render error: '+ String(err.message) +'</div>');
   console.error(err);
