@@ -963,11 +963,14 @@ async function exportSlidePptx(){
     for(const sl of slides){
       const slide=pptx.addSlide();
       const sw=(sl.w||first.w||1080)/96, sh=(sl.h||first.h||1350)/96;
-      // Stack each element as a separate full-bleed image, bottom layer first.
-      // In Canva/PowerPoint each becomes an independent, reorderable element,
-      // so you can drop your own image between any two layers.
+      // Each element is its own image, cropped and placed at its slide position
+      // (background is full-bleed). Added bottom layer first, so in Canva/
+      // PowerPoint they stack as independent, reorderable elements and you can
+      // drop your own image between any two.
       for(const layer of (sl.layers||[])){
-        slide.addImage({data:"data:image/png;base64,"+layer.png,x:0,y:0,w:sw,h:sh,altText:layer.name});
+        const lx=(layer.x||0)/96, ly=(layer.y||0)/96;
+        const lw=(layer.w!=null?layer.w:sl.w)/96, lh=(layer.h!=null?layer.h:sl.h)/96;
+        slide.addImage({data:"data:image/png;base64,"+layer.png,x:lx,y:ly,w:lw,h:lh,altText:layer.name});
       }
     }
     btn.textContent="Saving…";

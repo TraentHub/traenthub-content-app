@@ -230,17 +230,18 @@ async function screenshotSlides(html) {
   }
 }
 
-// Layered export: each slide element on its own transparent, full-bleed PNG so
-// they can be stacked as independent layers in a PPTX. Order is bottom → top.
+// Layered export: each slide element on its own transparent PNG, cropped to the
+// element's bounds (background is full-bleed), with slide-relative position so
+// layers can be placed as tight, reorderable PPTX elements. Bottom → top.
 // Mirrors export-server.js (the production Cloud Run service).
 const LAYER_DEFS = [
   { name: 'background', selector: null },
   { name: 'graphic',    selector: '.graphic' },
-  { name: 'kicker',     selector: '.content > .kicker' },
-  { name: 'title',      selector: '.content > .title-wrap' },
-  { name: 'body',       selector: '.content > .body' },
-  { name: 'footer',     selector: '.footer-meta' },
   { name: 'logo',       selector: '.brand-lockup' },
+  { name: 'footer',     selector: '.footer-meta' },
+  { name: 'kicker',     selector: '.kicker' },
+  { name: 'body',       selector: '.body' },
+  { name: 'title',      selector: '.title' },
 ];
 
 async function screenshotLayers(html) {
@@ -260,6 +261,12 @@ async function screenshotLayers(html) {
         'article.slide.lyr-transparent{background:transparent !important}' +
         'article.slide.lyr-transparent::after{display:none !important}',
     });
+    // Grow the viewport to fit the whole deck so page.screenshot({clip}) can
+    // capture regions below the original fold (slides are taller than 1200px).
+    const fullHeight = await page.evaluate(() => Math.ceil(document.documentElement.scrollHeight));
+    await page.setViewportSize({ width: 2200, height: Math.max(1200, fullHeight) });
+    await page.waitForTimeout(200);
+
     const slideHandles = await page.$$('.deck article.slide');
     const out = [];
     for (let i = 0; i < slideHandles.length; i++) {
@@ -268,29 +275,60 @@ async function screenshotLayers(html) {
       const layers = [];
       for (const def of LAYER_DEFS) {
         const isBg = def.selector === null;
-        const visible = await slide.evaluate((el, d) => {
+        const rect = await slide.evaluate((el, d) => {
           el.classList.toggle('lyr-transparent', !d.isBg);
           el.querySelectorAll('*').forEach((n) => { n.style.visibility = 'hidden'; });
-          if (d.isBg) return true;
+          const sr = el.getBoundingClientRect();
+          if (d.isBg) return { x: 0, y: 0, w: sr.width, h: sr.height };
           for (let a = el.parentElement; a; a = a.parentElement) {
             a.style.setProperty('background', 'transparent', 'important');
             a.setAttribute('data-lyr-anc', '1');
           }
-          let any = false;
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, any = false;
+          const grow = (r) => {
+            if (!r || r.width <= 0 || r.height <= 0) return;
+            if (r.left < minX) minX = r.left;
+            if (r.top < minY) minY = r.top;
+            if (r.right > maxX) maxX = r.right;
+            if (r.bottom > maxY) maxY = r.bottom;
+          };
           el.querySelectorAll(d.selector).forEach((t) => {
             const cs = getComputedStyle(t);
-            const r = t.getBoundingClientRect();
-            if (cs.display !== 'none' && r.width > 0 && r.height > 0) {
-              any = true;
-              t.style.visibility = 'visible';
-              t.querySelectorAll('*').forEach((n) => { n.style.visibility = 'visible'; });
-            }
+            const base = t.getBoundingClientRect();
+            if (cs.display === 'none' || base.width <= 0 || base.height <= 0) return;
+            any = true;
+            t.style.visibility = 'visible';
+            t.querySelectorAll('*').forEach((n) => { n.style.visibility = 'visible'; });
+            grow(base);
+            // Text can overflow its box (e.g. a long unbreakable title word);
+            // the text line boxes give the true rendered extent.
+            try {
+              const rng = document.createRange();
+              rng.selectNodeContents(t);
+              const rects = rng.getClientRects();
+              for (let k = 0; k < rects.length; k++) grow(rects[k]);
+            } catch (e) { /* ignore */ }
           });
-          return any;
+          if (!any) return null;
+          const PAD = 3; // px safety for glyph overhang
+          const x = Math.max(0, minX - sr.left - PAD), y = Math.max(0, minY - sr.top - PAD);
+          const w = Math.min(sr.width, maxX - sr.left + PAD) - x;
+          const h = Math.min(sr.height, maxY - sr.top + PAD) - y;
+          if (w <= 0 || h <= 0) return null;
+          return { x, y, w, h };
         }, { selector: def.selector, isBg });
-        if (visible) {
-          const png = await slide.screenshot({ type: 'png', omitBackground: !isBg });
-          layers.push({ name: def.name, png: png.toString('base64') });
+        if (rect && box) {
+          // One set of integer, slide-relative coords for both the capture clip
+          // and the reported position, so the PNG lines up exactly when placed.
+          const X = Math.round(rect.x), Y = Math.round(rect.y);
+          const W = Math.round(rect.w), H = Math.round(rect.h);
+          const ox = Math.round(box.x), oy = Math.round(box.y);
+          const png = await page.screenshot({
+            type: 'png',
+            omitBackground: !isBg,
+            clip: { x: ox + X, y: oy + Y, width: W, height: H },
+          });
+          layers.push({ name: def.name, png: png.toString('base64'), x: X, y: Y, w: W, h: H });
         }
         await slide.evaluate((el) => {
           el.classList.remove('lyr-transparent');

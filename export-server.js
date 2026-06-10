@@ -70,18 +70,24 @@ async function screenshotSlides(html) {
 }
 
 // ── Layered Screenshot Engine ────────────────────────────────────────────────
-// Renders each slide element onto its own transparent, full-bleed PNG so they
-// can be stacked as independent layers in a PPTX (editable/reorderable in Canva
-// or PowerPoint). Order is bottom → top.
+// Renders each slide element onto its own transparent PNG, cropped to the
+// element's bounds, and reports each layer's position/size (slide-relative CSS
+// px) so they can be placed as independent, tightly-sized, reorderable layers
+// in a PPTX (editable in Canva or PowerPoint).
+//
+// Listed bottom → top (PPTX paint / Canva layer order). The background is the
+// only full-bleed layer; the rest are sized to their element. The visible
+// layer-panel order in Canva (top → bottom) is the reverse of this list:
+// title, body, kicker, footer, logo, graphic, background.
 
 const LAYER_DEFS = [
-  { name: 'background', selector: null },                 // slide fill + split panel
-  { name: 'graphic',    selector: '.graphic' },           // abstract asset (below text)
-  { name: 'kicker',     selector: '.content > .kicker' },
-  { name: 'title',      selector: '.content > .title-wrap' },
-  { name: 'body',       selector: '.content > .body' },
+  { name: 'background', selector: null },             // full-bleed slide fill + panel
+  { name: 'graphic',    selector: '.graphic' },       // abstract asset (behind text)
+  { name: 'logo',       selector: '.brand-lockup' },  // visible top/bottom lockup
   { name: 'footer',     selector: '.footer-meta' },
-  { name: 'logo',       selector: '.brand-lockup' },      // visible top/bottom lockup
+  { name: 'kicker',     selector: '.kicker' },
+  { name: 'body',       selector: '.body' },
+  { name: 'title',      selector: '.title' },
 ];
 
 const CHROMIUM_ARGS = [
@@ -119,6 +125,12 @@ async function screenshotLayers(html) {
         'article.slide.lyr-transparent::after{display:none !important}',
     });
 
+    // Grow the viewport to fit the whole deck so page.screenshot({clip}) can
+    // capture regions below the original fold (slides are taller than 1200px).
+    const fullHeight = await page.evaluate(() => Math.ceil(document.documentElement.scrollHeight));
+    await page.setViewportSize({ width: 2200, height: Math.max(1200, fullHeight) });
+    await page.waitForTimeout(200);
+
     const slideHandles = await page.$$('.deck article.slide');
     const out = [];
     for (let i = 0; i < slideHandles.length; i++) {
@@ -128,34 +140,67 @@ async function screenshotLayers(html) {
 
       for (const def of LAYER_DEFS) {
         const isBg = def.selector === null;
-        // Isolate this layer. Use visibility (not display) so nothing reflows
-        // and every layer stays pixel-aligned with the others.
-        const visible = await slide.evaluate((el, d) => {
+        // Isolate this layer (visibility, not display, so nothing reflows) and
+        // measure the union bounds of its visible element(s), slide-relative
+        // and clamped to the slide (so off-canvas bleed is dropped).
+        const rect = await slide.evaluate((el, d) => {
           el.classList.toggle('lyr-transparent', !d.isBg);
           el.querySelectorAll('*').forEach((n) => { n.style.visibility = 'hidden'; });
-          if (d.isBg) return true;
+          const sr = el.getBoundingClientRect();
+          if (d.isBg) return { x: 0, y: 0, w: sr.width, h: sr.height };
           // Neutralize ancestor backgrounds (body/deck/canvas carry an opaque
           // fill) so the transparent slide yields a real alpha channel.
           for (let a = el.parentElement; a; a = a.parentElement) {
             a.style.setProperty('background', 'transparent', 'important');
             a.setAttribute('data-lyr-anc', '1');
           }
-          let any = false;
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, any = false;
+          const grow = (r) => {
+            if (!r || r.width <= 0 || r.height <= 0) return;
+            if (r.left < minX) minX = r.left;
+            if (r.top < minY) minY = r.top;
+            if (r.right > maxX) maxX = r.right;
+            if (r.bottom > maxY) maxY = r.bottom;
+          };
           el.querySelectorAll(d.selector).forEach((t) => {
             const cs = getComputedStyle(t);
-            const r = t.getBoundingClientRect();
-            if (cs.display !== 'none' && r.width > 0 && r.height > 0) {
-              any = true;
-              t.style.visibility = 'visible';
-              t.querySelectorAll('*').forEach((n) => { n.style.visibility = 'visible'; });
-            }
+            const base = t.getBoundingClientRect();
+            if (cs.display === 'none' || base.width <= 0 || base.height <= 0) return;
+            any = true;
+            t.style.visibility = 'visible';
+            t.querySelectorAll('*').forEach((n) => { n.style.visibility = 'visible'; });
+            grow(base);
+            // Text can overflow its box (e.g. a long unbreakable title word);
+            // the text line boxes give the true rendered extent.
+            try {
+              const rng = document.createRange();
+              rng.selectNodeContents(t);
+              const rects = rng.getClientRects();
+              for (let k = 0; k < rects.length; k++) grow(rects[k]);
+            } catch (e) { /* ignore */ }
           });
-          return any;
+          if (!any) return null;
+          const PAD = 3; // px safety for glyph overhang
+          const x = Math.max(0, minX - sr.left - PAD), y = Math.max(0, minY - sr.top - PAD);
+          const w = Math.min(sr.width, maxX - sr.left + PAD) - x;
+          const h = Math.min(sr.height, maxY - sr.top + PAD) - y;
+          if (w <= 0 || h <= 0) return null;
+          return { x, y, w, h };
         }, { selector: def.selector, isBg });
 
-        if (visible) {
-          const png = await slide.screenshot({ type: 'png', omitBackground: !isBg });
-          layers.push({ name: def.name, png: png.toString('base64') });
+        if (rect && box) {
+          // Use one set of integer, slide-relative coords for both the capture
+          // clip and the reported position so the PNG pixel grid lines up
+          // exactly with where it's placed in the PPTX.
+          const X = Math.round(rect.x), Y = Math.round(rect.y);
+          const W = Math.round(rect.w), H = Math.round(rect.h);
+          const ox = Math.round(box.x), oy = Math.round(box.y);
+          const png = await page.screenshot({
+            type: 'png',
+            omitBackground: !isBg,
+            clip: { x: ox + X, y: oy + Y, width: W, height: H },
+          });
+          layers.push({ name: def.name, png: png.toString('base64'), x: X, y: Y, w: W, h: H });
         }
 
         // Reset for the next layer.
