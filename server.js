@@ -8,10 +8,100 @@ const Schema = require('./public/shared/config-schema.js');
 const PORT = process.env.PORT || 3000;
 
 // ── Storage ────────────────────────────────────────────────────────────────
-// In-memory by default. Set STORAGE=kv to use Vercel KV in production.
+// Uses Vercel Redis (node-redis) when REDIS_URL is set (production).
+// Falls back to an in-memory store for local development.
+//
+// NOTE: On Vercel this file IS the deployed entrypoint (framework "node"),
+// so the store must live here. In-memory state does not survive across
+// Fluid Compute instances/cold starts, hence Redis in production.
 
-const store = (function createStorage() {
-  // In-memory implementation (default)
+function createRedisStore() {
+  const { createClient } = require('redis');
+  let _client = null;
+
+  async function client() {
+    if (_client && _client.isReady) return _client;
+    _client = createClient({ url: process.env.REDIS_URL });
+    _client.on('error', err => console.error('Redis error:', err));
+    await _client.connect();
+    return _client;
+  }
+
+  return {
+    async create(session) {
+      const c = await client();
+      await c.set('session:' + session.id, JSON.stringify({
+        id: session.id,
+        status: session.status,
+        config: JSON.stringify(session.config),
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+      }));
+      return session;
+    },
+    async get(id) {
+      const c = await client();
+      const raw = await c.get('session:' + id);
+      if (!raw) return null;
+      const row = JSON.parse(raw);
+      return {
+        id: row.id,
+        status: row.status,
+        config: typeof row.config === 'string' ? JSON.parse(row.config) : row.config,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      };
+    },
+    async update(id, config, status) {
+      const existing = await this.get(id);
+      if (!existing) return null;
+      const updated = {
+        id: existing.id,
+        status: status !== undefined ? status : existing.status,
+        config: config !== undefined ? JSON.stringify(config) : JSON.stringify(existing.config),
+        createdAt: existing.createdAt,
+        updatedAt: new Date().toISOString(),
+      };
+      const c = await client();
+      await c.set('session:' + id, JSON.stringify(updated));
+      return {
+        id: updated.id,
+        status: updated.status,
+        config: JSON.parse(updated.config),
+        createdAt: updated.createdAt,
+        updatedAt: updated.updatedAt,
+      };
+    },
+    async list() {
+      const c = await client();
+      const keys = await c.keys('session:*');
+      if (!keys.length) return [];
+      const raws = await c.mGet(keys);
+      return raws
+        .filter(Boolean)
+        .map(raw => {
+          const row = JSON.parse(raw);
+          const config = typeof row.config === 'string' ? JSON.parse(row.config) : row.config;
+          return {
+            id: row.id,
+            status: row.status,
+            name: (config && config.global && config.global.name) || '',
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+          };
+        })
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    },
+    async delete(id) {
+      const c = await client();
+      await c.del('session:' + id);
+      return { id };
+    },
+  };
+}
+
+function createMemoryStore() {
+  // In-memory implementation (default for local dev)
   const sessions = new Map();
 
   return {
@@ -70,7 +160,9 @@ const store = (function createStorage() {
       return { id };
     },
   };
-})();
+}
+
+const store = process.env.REDIS_URL ? createRedisStore() : createMemoryStore();
 
 // ── API Key ────────────────────────────────────────────────────────────────
 
@@ -157,6 +249,15 @@ async function handleApiRoute(req, res) {
   }
 
   try {
+    // GET /api/debug — reports which store is active (verifies REDIS_URL)
+    if (method === 'GET' && (url === '/api/debug' || url === '/debug')) {
+      return jsonResponse(res, 200, {
+        store: process.env.REDIS_URL ? 'redis' : 'memory',
+        redisUrlSet: !!process.env.REDIS_URL,
+        redisUrlPrefix: process.env.REDIS_URL ? process.env.REDIS_URL.slice(0, 20) + '…' : null,
+      });
+    }
+
     // GET /api/schema
     if (method === 'GET' && url === '/api/schema') {
       return jsonResponse(res, 200, Schema.getSchemaDescriptor());
