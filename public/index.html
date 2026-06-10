@@ -1456,11 +1456,19 @@ async function deleteSession(id){
     const r=await fetch(`/api/configs/${encodeURIComponent(id)}`,{method:'DELETE'});
     if(!r.ok) throw new Error((await r.json()).error||await r.text());
     if(id===currentSessionId){
+      // Deleting the currently-open session: start a fresh deck instead of
+      // recreating a clone. The old code called autoCreateSession() while the
+      // editor (and the AUTOSAVE_KEY cache) still held the deleted session's
+      // content, so an identical draft immediately reappeared — looking as if
+      // delete didn't work.
+      clearTimeout(_autoSaveTimer);
       currentSessionId=null;
       localStorage.removeItem(SESSION_ID_KEY);
+      localStorage.removeItem(AUTOSAVE_KEY);
       window.history.replaceState({},'','/');
       updateSaveBtn();
-      autoCreateSession();
+      await loadSampleConfig();
+      await autoCreateSession();
     }
     renderSessionsList();
   }catch(e){alert('Errore eliminazione: '+e.message);}
