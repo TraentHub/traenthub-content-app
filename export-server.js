@@ -69,6 +69,120 @@ async function screenshotSlides(html) {
   }
 }
 
+// ── Layered Screenshot Engine ────────────────────────────────────────────────
+// Renders each slide element onto its own transparent, full-bleed PNG so they
+// can be stacked as independent layers in a PPTX (editable/reorderable in Canva
+// or PowerPoint). Order is bottom → top.
+
+const LAYER_DEFS = [
+  { name: 'background', selector: null },                 // slide fill + split panel
+  { name: 'graphic',    selector: '.graphic' },           // abstract asset (below text)
+  { name: 'kicker',     selector: '.content > .kicker' },
+  { name: 'title',      selector: '.content > .title-wrap' },
+  { name: 'body',       selector: '.content > .body' },
+  { name: 'footer',     selector: '.footer-meta' },
+  { name: 'logo',       selector: '.brand-lockup' },      // visible top/bottom lockup
+];
+
+const CHROMIUM_ARGS = [
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-extensions',
+  '--no-first-run',
+  '--disable-features=VizDisplayCompositor',
+];
+
+async function screenshotLayers(html) {
+  const { chromium } = require('playwright');
+  const tmp = path.join(os.tmpdir(), `traent-lyr-${Date.now()}.html`);
+  fs.writeFileSync(tmp, html, 'utf8');
+
+  const browser = await chromium.launch({ headless: true, args: CHROMIUM_ARGS });
+  const ctx = await browser.newContext({ deviceScaleFactor: 2 });
+  const page = await ctx.newPage();
+  await page.setViewportSize({ width: 2200, height: 1200 });
+
+  try {
+    await page.goto(`file://${tmp}`, { waitUntil: 'networkidle' });
+    await page.evaluate(() =>
+      document.fonts.ready.then(() => window.dispatchEvent(new Event('resize')))
+    );
+    await page.waitForTimeout(700);
+
+    // Transparent-layer helper: blanks the slide fill + split panel so overlays
+    // capture only their element on a transparent background.
+    await page.addStyleTag({
+      content:
+        'article.slide.lyr-transparent{background:transparent !important}' +
+        'article.slide.lyr-transparent::after{display:none !important}',
+    });
+
+    const slideHandles = await page.$$('.deck article.slide');
+    const out = [];
+    for (let i = 0; i < slideHandles.length; i++) {
+      const slide = slideHandles[i];
+      const box = await slide.boundingBox();
+      const layers = [];
+
+      for (const def of LAYER_DEFS) {
+        const isBg = def.selector === null;
+        // Isolate this layer. Use visibility (not display) so nothing reflows
+        // and every layer stays pixel-aligned with the others.
+        const visible = await slide.evaluate((el, d) => {
+          el.classList.toggle('lyr-transparent', !d.isBg);
+          el.querySelectorAll('*').forEach((n) => { n.style.visibility = 'hidden'; });
+          if (d.isBg) return true;
+          // Neutralize ancestor backgrounds (body/deck/canvas carry an opaque
+          // fill) so the transparent slide yields a real alpha channel.
+          for (let a = el.parentElement; a; a = a.parentElement) {
+            a.style.setProperty('background', 'transparent', 'important');
+            a.setAttribute('data-lyr-anc', '1');
+          }
+          let any = false;
+          el.querySelectorAll(d.selector).forEach((t) => {
+            const cs = getComputedStyle(t);
+            const r = t.getBoundingClientRect();
+            if (cs.display !== 'none' && r.width > 0 && r.height > 0) {
+              any = true;
+              t.style.visibility = 'visible';
+              t.querySelectorAll('*').forEach((n) => { n.style.visibility = 'visible'; });
+            }
+          });
+          return any;
+        }, { selector: def.selector, isBg });
+
+        if (visible) {
+          const png = await slide.screenshot({ type: 'png', omitBackground: !isBg });
+          layers.push({ name: def.name, png: png.toString('base64') });
+        }
+
+        // Reset for the next layer.
+        await slide.evaluate((el) => {
+          el.classList.remove('lyr-transparent');
+          el.querySelectorAll('*').forEach((n) => { n.style.visibility = ''; });
+          el.ownerDocument.querySelectorAll('[data-lyr-anc]').forEach((a) => {
+            a.style.removeProperty('background');
+            a.removeAttribute('data-lyr-anc');
+          });
+        });
+      }
+
+      out.push({
+        id: String(i + 1).padStart(2, '0'),
+        w: Math.round(box ? box.width : 0),
+        h: Math.round(box ? box.height : 0),
+        layers,
+      });
+    }
+    return out;
+  } finally {
+    await browser.close();
+    try { fs.unlinkSync(tmp); } catch {}
+  }
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function setCORS(res, origin) {
@@ -139,6 +253,26 @@ async function handleScreenshot(req, res) {
   }
 }
 
+async function handleScreenshotLayers(req, res) {
+  const origin = req.headers['origin'] || '';
+  setCORS(res, origin);
+  try {
+    const body = await readBody(req);
+    const { html } = JSON.parse(body.toString());
+    if (!html || typeof html !== 'string') {
+      return json(res, 400, { error: 'Missing or invalid "html" field' });
+    }
+    const slides = await screenshotLayers(html);
+    json(res, 200, { slides });
+  } catch (e) {
+    console.error('[screenshot-layers]', e);
+    if (e.message === 'Payload too large') {
+      return json(res, 413, { error: 'Payload exceeds 10 MB limit' });
+    }
+    json(res, 500, { error: e.message || 'Internal screenshot error' });
+  }
+}
+
 // ── Server ─────────────────────────────────────────────────────────────────
 
 const server = http.createServer((req, res) => {
@@ -160,6 +294,10 @@ const server = http.createServer((req, res) => {
     return handleScreenshot(req, res);
   }
 
+  if (req.method === 'POST' && url === '/screenshot-layers') {
+    return handleScreenshotLayers(req, res);
+  }
+
   json(res, 404, { error: 'Not found' });
 });
 
@@ -167,5 +305,6 @@ server.listen(PORT, () => {
   console.log(`✅ Traent Hub Export Service running on port ${PORT}`);
   console.log(`   GET  /health     — health check`);
   console.log(`   POST /screenshot — PNG export`);
+  console.log(`   POST /screenshot-layers — layered PPTX export`);
   console.log(`   API key: ${API_KEY ? 'required' : 'open (no key set)'}`);
 });

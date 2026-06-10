@@ -230,6 +230,86 @@ async function screenshotSlides(html) {
   }
 }
 
+// Layered export: each slide element on its own transparent, full-bleed PNG so
+// they can be stacked as independent layers in a PPTX. Order is bottom → top.
+// Mirrors export-server.js (the production Cloud Run service).
+const LAYER_DEFS = [
+  { name: 'background', selector: null },
+  { name: 'graphic',    selector: '.graphic' },
+  { name: 'kicker',     selector: '.content > .kicker' },
+  { name: 'title',      selector: '.content > .title-wrap' },
+  { name: 'body',       selector: '.content > .body' },
+  { name: 'footer',     selector: '.footer-meta' },
+  { name: 'logo',       selector: '.brand-lockup' },
+];
+
+async function screenshotLayers(html) {
+  const { chromium } = require('playwright');
+  const tmp = path.join(os.tmpdir(), `traent-lyr-${Date.now()}.html`);
+  fs.writeFileSync(tmp, html, 'utf8');
+  const browser = await chromium.launch({ headless: true });
+  const ctx = await browser.newContext({ deviceScaleFactor: 2 });
+  const page = await ctx.newPage();
+  await page.setViewportSize({ width: 2200, height: 1200 });
+  try {
+    await page.goto(`file://${tmp}`, { waitUntil: 'networkidle' });
+    await page.evaluate(() => document.fonts.ready.then(() => window.dispatchEvent(new Event('resize'))));
+    await page.waitForTimeout(700);
+    await page.addStyleTag({
+      content:
+        'article.slide.lyr-transparent{background:transparent !important}' +
+        'article.slide.lyr-transparent::after{display:none !important}',
+    });
+    const slideHandles = await page.$$('.deck article.slide');
+    const out = [];
+    for (let i = 0; i < slideHandles.length; i++) {
+      const slide = slideHandles[i];
+      const box = await slide.boundingBox();
+      const layers = [];
+      for (const def of LAYER_DEFS) {
+        const isBg = def.selector === null;
+        const visible = await slide.evaluate((el, d) => {
+          el.classList.toggle('lyr-transparent', !d.isBg);
+          el.querySelectorAll('*').forEach((n) => { n.style.visibility = 'hidden'; });
+          if (d.isBg) return true;
+          for (let a = el.parentElement; a; a = a.parentElement) {
+            a.style.setProperty('background', 'transparent', 'important');
+            a.setAttribute('data-lyr-anc', '1');
+          }
+          let any = false;
+          el.querySelectorAll(d.selector).forEach((t) => {
+            const cs = getComputedStyle(t);
+            const r = t.getBoundingClientRect();
+            if (cs.display !== 'none' && r.width > 0 && r.height > 0) {
+              any = true;
+              t.style.visibility = 'visible';
+              t.querySelectorAll('*').forEach((n) => { n.style.visibility = 'visible'; });
+            }
+          });
+          return any;
+        }, { selector: def.selector, isBg });
+        if (visible) {
+          const png = await slide.screenshot({ type: 'png', omitBackground: !isBg });
+          layers.push({ name: def.name, png: png.toString('base64') });
+        }
+        await slide.evaluate((el) => {
+          el.classList.remove('lyr-transparent');
+          el.querySelectorAll('*').forEach((n) => { n.style.visibility = ''; });
+          el.ownerDocument.querySelectorAll('[data-lyr-anc]').forEach((a) => {
+            a.style.removeProperty('background');
+            a.removeAttribute('data-lyr-anc');
+          });
+        });
+      }
+      out.push({ id: String(i + 1).padStart(2, '0'), w: Math.round(box ? box.width : 0), h: Math.round(box ? box.height : 0), layers });
+    }
+    return out;
+  } finally {
+    await browser.close();
+    try { fs.unlinkSync(tmp); } catch {}
+  }
+}
+
 // ── API Routes ─────────────────────────────────────────────────────────────
 
 async function handleApiRoute(req, res) {
@@ -394,6 +474,25 @@ const server = http.createServer(async (req, res) => {
       try {
         const { html } = JSON.parse(Buffer.concat(chunks).toString());
         const slides = await screenshotSlides(html);
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ slides }));
+      } catch (e) {
+        console.error(e);
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end(String(e.message));
+      }
+    });
+    return;
+  }
+
+  // Layered screenshot endpoint (PPTX export)
+  if (req.method === 'POST' && req.url === '/screenshot-layers') {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', async () => {
+      try {
+        const { html } = JSON.parse(Buffer.concat(chunks).toString());
+        const slides = await screenshotLayers(html);
         res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
         res.end(JSON.stringify({ slides }));
       } catch (e) {

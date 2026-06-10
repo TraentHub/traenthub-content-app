@@ -283,6 +283,7 @@ textarea{min-height:118px;resize:vertical;font-family:'JetBrains Mono',monospace
       <button class="icon-btn" id="downloadJsonBtn" title="Download JSON" type="button">&#8595; JSON</button>
       <button class="icon-btn" id="downloadHtmlBtn" title="Download rendered HTML deck" type="button">&#8595; HTML</button>
       <button class="icon-btn" id="exportPngBtn" title="Export slides as PNG" type="button">&#8595; PNG</button>
+      <button class="icon-btn" id="exportPptxBtn" title="Export as layered PPTX (editable layers in Canva/PowerPoint)" type="button">&#8595; PPTX</button>
     </div>
   </header>
 
@@ -928,6 +929,55 @@ async function exportSlidePngs(){
   }
   btn.textContent=orig;
 }
+async function exportSlidePptx(){
+  const btn=$("exportPptxBtn");
+  if(!btn) return;
+  const orig=btn.textContent;
+  // Load PptxGenJS on demand (browser bundle)
+  if(!window.PptxGenJS){
+    btn.textContent="Loading…";
+    try{
+      await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+    }catch(e){btn.textContent=orig;alert("Could not load PptxGenJS.");return;}
+  }
+  btn.textContent="Rendering…";
+  try{
+    const html=buildHtmlDeck();
+    const name=slugify(($("designName")&&$("designName").value.trim())||state.global.name||"deck");
+    const base=(location.hostname==="localhost"||location.hostname==="127.0.0.1")?"":EXPORT_SERVICE_URL;
+    const resp=await fetch(base+"/screenshot-layers",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({html})
+    });
+    if(!resp.ok) throw new Error(await resp.text());
+    const {slides}=await resp.json();
+    if(!slides||!slides.length) throw new Error("No slides returned");
+    btn.textContent="Building…";
+    // PPTX uses inches; convert CSS px at 96 dpi. All slides share the deck canvas.
+    const first=slides[0];
+    const wIn=(first.w||1080)/96, hIn=(first.h||1350)/96;
+    const pptx=new PptxGenJS();
+    pptx.defineLayout({name:"TRAENT",width:wIn,height:hIn});
+    pptx.layout="TRAENT";
+    for(const sl of slides){
+      const slide=pptx.addSlide();
+      const sw=(sl.w||first.w||1080)/96, sh=(sl.h||first.h||1350)/96;
+      // Stack each element as a separate full-bleed image, bottom layer first.
+      // In Canva/PowerPoint each becomes an independent, reorderable element,
+      // so you can drop your own image between any two layers.
+      for(const layer of (sl.layers||[])){
+        slide.addImage({data:"data:image/png;base64,"+layer.png,x:0,y:0,w:sw,h:sh,altText:layer.name});
+      }
+    }
+    btn.textContent="Saving…";
+    await pptx.writeFile({fileName:name+".pptx"});
+  }catch(e){
+    console.error(e);
+    alert("PPTX export failed.\n\n"+(location.hostname==="localhost"?"Make sure the server is running:\n  npm run dev\n\n":"The export service may be temporarily unavailable.\n\n")+e.message);
+  }
+  btn.textContent=orig;
+}
 function addRule(){
   const field=$("newRuleField").value,target=$("newRuleTarget").value.trim(),device=$("newRuleDevice").value;
   const fake={field,target,device}, st=ruleStatus(current(),fake);
@@ -1120,6 +1170,7 @@ try {
   if($("downloadJsonBtn")) $("downloadJsonBtn").addEventListener("click",downloadJson);
   if($("downloadHtmlBtn")) $("downloadHtmlBtn").addEventListener("click",downloadHtmlDeck);
   if($("exportPngBtn"))    $("exportPngBtn").addEventListener("click",exportSlidePngs);
+  if($("exportPptxBtn"))   $("exportPptxBtn").addEventListener("click",exportSlidePptx);
   window.addEventListener("resize",()=>{fitActivePreview();fitTitles();});
   document.fonts.ready.then(()=>{fitTitles();});
   if(!urlLoaded && !sessionLoaded) autoCreateSession();
