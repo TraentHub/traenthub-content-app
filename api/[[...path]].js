@@ -17,6 +17,7 @@ function createUpstashStore() {
 
   return {
     async create(session) {
+      await redis.sadd('sessions:index', session.id);
       await redis.set('session:' + session.id, JSON.stringify({
         id: session.id,
         status: session.status,
@@ -56,6 +57,38 @@ function createUpstashStore() {
         createdAt: updated.createdAt,
         updatedAt: updated.updatedAt,
       };
+    },
+    async list() {
+      // SCAN all session:* keys — handles sessions created before index tracking
+      let cursor = 0;
+      const keys = [];
+      do {
+        const result = await redis.scan(cursor, { match: 'session:*', count: 100 });
+        cursor = Number(result[0]);
+        keys.push(...result[1]);
+      } while (cursor !== 0);
+      if (!keys.length) return [];
+      const ids = keys.map(k => k.replace('session:', ''));
+      const raws = await Promise.all(ids.map(id => redis.get('session:' + id)));
+      return raws
+        .filter(Boolean)
+        .map(raw => {
+          const row = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          const config = typeof row.config === 'string' ? JSON.parse(row.config) : row.config;
+          return {
+            id: row.id,
+            status: row.status,
+            name: (config && config.global && config.global.name) || '',
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+          };
+        })
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    },
+    async delete(id) {
+      await redis.del('session:' + id);
+      await redis.srem('sessions:index', id);
+      return { id };
     },
   };
 }
@@ -98,6 +131,25 @@ function createMemoryStore() {
         updatedAt: row.updatedAt,
       };
     },
+    async list() {
+      return Array.from(sessions.values())
+        .map(row => {
+          const config = JSON.parse(row.config);
+          return {
+            id: row.id,
+            status: row.status,
+            name: (config && config.global && config.global.name) || '',
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+          };
+        })
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    },
+    async delete(id) {
+      if (!sessions.has(id)) return null;
+      sessions.delete(id);
+      return { id };
+    },
   };
 }
 
@@ -137,7 +189,7 @@ async function handleApiRoute(req, res) {
 
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Max-Age', '86400');
 
@@ -190,6 +242,12 @@ async function handleApiRoute(req, res) {
       return res.status(201).json(session);
     }
 
+    // GET /api/configs (list)
+    if (method === 'GET' && (url === '/configs' || url === '/api/configs')) {
+      const list = await store.list();
+      return res.status(200).json({ sessions: list });
+    }
+
     // GET /api/configs/:id
     if (method === 'GET') {
       const match = url.match(/^\/(?:api\/)?configs\/([^/?]+)$/);
@@ -200,23 +258,39 @@ async function handleApiRoute(req, res) {
       }
     }
 
-    // PATCH /api/configs/:id (full replacement)
+    // PATCH /api/configs/:id (config and/or status update)
     if (method === 'PATCH') {
       const match = url.match(/^\/(?:api\/)?configs\/([^/?]+)$/);
       if (match && !url.endsWith('/approve')) {
         const id = match[1];
         const existing = await store.get(id);
         if (!existing) return res.status(404).json({ error: 'Not found' });
-        const result = Schema.validateConfig(body.config || body);
-        if (!result.valid) {
-          return res.status(422).json({ error: 'Validation failed', details: result.errors });
+        let newConfig = undefined;
+        const newStatus = body.status !== undefined ? body.status : undefined;
+        if (body.config !== undefined) {
+          const result = Schema.validateConfig(body.config);
+          if (!result.valid) return res.status(422).json({ error: 'Validation failed', details: result.errors });
+          newConfig = result.normalizedConfig;
+        } else if (newStatus === undefined) {
+          const result = Schema.validateConfig(body);
+          if (!result.valid) return res.status(422).json({ error: 'Validation failed', details: result.errors });
+          newConfig = result.normalizedConfig;
         }
-        const updated = await store.update(id, result.normalizedConfig);
-        return res.status(200).json({
-          id: updated.id,
-          status: updated.status,
-          updatedAt: updated.updatedAt,
-        });
+        const updated = await store.update(id, newConfig, newStatus);
+        return res.status(200).json({ id: updated.id, status: updated.status, updatedAt: updated.updatedAt });
+      }
+    }
+
+    // DELETE /api/configs/:id
+    if (method === 'DELETE') {
+      const match = url.match(/^\/(?:api\/)?configs\/([^/?]+)$/);
+      if (match) {
+        const id = match[1];
+        const existing = await store.get(id);
+        if (!existing) return res.status(404).json({ error: 'Not found' });
+        if (existing.status === 'published') return res.status(403).json({ error: 'Cannot delete a published session' });
+        await store.delete(id);
+        return res.status(200).json({ ok: true });
       }
     }
 

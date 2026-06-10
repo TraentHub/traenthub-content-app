@@ -71,13 +71,20 @@ body{overflow:auto}
 .film-item.active{border-color:var(--pop);box-shadow:0 0 0 2px rgba(255,61,0,.12) inset}
 .film-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--gray-d);text-transform:uppercase;letter-spacing:.08em}
 .review-view{height:100%;min-height:0;background:var(--secondary);border:1px solid var(--line);border-radius:8px;padding:16px;overflow:auto;display:none}
+.sessions-view{height:100%;min-height:0;background:var(--secondary);border:1px solid var(--line);border-radius:8px;padding:16px;overflow:auto;display:none}
+.sessions-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-content:start}
+.session-card{background:#FAF8F3;border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:8px}
+.session-card.active{border-color:var(--pop);box-shadow:0 0 0 2px rgba(255,61,0,.12) inset}
+.session-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.session-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.session-card-meta{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--gray-d);letter-spacing:.05em}
+.session-card-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+button.danger{background:#fff;color:#c0392b;border:1px solid #e74c3c}
 .review-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;max-width:1400px;margin:0 auto}
 .review-card{background:rgba(245,242,237,.84);border:1px solid var(--line);border-radius:8px;padding:16px}
 .review-card .review-meta{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gray-d);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px}
 .slide{width:100%;aspect-ratio:var(--ratio);position:relative;overflow:hidden;background:var(--paper);color:var(--ink);container-type:inline-size}
 body[data-canvas="1080x1350"] .preview-stage-inner{width:min(86%,760px)}
-
-.preview-stage .slide{}
 
 /* Locked slide canvas backgrounds */
 .slide:not(.dark){
@@ -268,6 +275,7 @@ textarea{min-height:118px;resize:vertical;font-family:'JetBrains Mono',monospace
     <div class="view-tabs">
       <button class="tab-btn active" id="focusTab" type="button">Focus edit</button>
       <button class="tab-btn" id="reviewTab" type="button">Deck review</button>
+      <button class="tab-btn" id="sessionsTab" type="button">Sessions</button>
       <div class="brand"><img src="th-logo-symbol-dark.svg" alt="" style="height:28px;width:auto" /><span class="wordmark dark">traent<span class="dot">.</span>hub</span></div>
     </div>
     <div class="export-btns">
@@ -415,6 +423,10 @@ textarea{min-height:118px;resize:vertical;font-family:'JetBrains Mono',monospace
 
     <section class="review-view" id="reviewView">
       <div class="review-grid" id="reviewGrid"></div>
+    </section>
+
+    <section class="sessions-view" id="sessionsView">
+      <div class="sessions-grid" id="sessionsGrid"></div>
     </section>
   </main>
 </div>
@@ -1047,12 +1059,17 @@ function renderAssetGallery(){
 }
 function setActiveAsset(asset){ document.querySelectorAll(".asset-card").forEach(c=>c.classList.toggle("active", c.dataset.asset===asset)); }
 function setView(mode){
-  const focus = mode==="focus";
-  $("focusView").classList.toggle("hidden", !focus);
-  $("reviewView").style.display = focus ? "none" : "block";
-  $("focusTab").classList.toggle("active", focus);
-  $("reviewTab").classList.toggle("active", !focus);
-  render();
+  const focus=mode==="focus";
+  const review=mode==="review";
+  const sessions=mode==="sessions";
+  $("focusView").classList.toggle("hidden",!focus);
+  $("reviewView").style.display=review?"block":"none";
+  $("sessionsView").style.display=sessions?"block":"none";
+  $("focusTab").classList.toggle("active",focus);
+  $("reviewTab").classList.toggle("active",review);
+  if($("sessionsTab")) $("sessionsTab").classList.toggle("active",sessions);
+  if(!sessions) render();
+  if(sessions) renderSessionsList();
 }
 ["canvas","theme","layout","brand","brandPosition","accent","titleSize","bodySize","kickerSize","footerSize","logoSize","wordmarkSize","kickerCopy","footerMetaCopy","titleCopy","bodyCopy","titleWidth","bodyWidth"].forEach(id=>{$(id).addEventListener("input",render);$(id).addEventListener("change",render);});
 ["titleSize","bodySize","kickerSize","footerSize","logoSize","wordmarkSize"].forEach(id=>{$(id).addEventListener("input",()=>{const v=Number($(id).value);const el=$(id+"Val");if(el)el.textContent=(v>0?"+":"")+v;});});
@@ -1074,6 +1091,12 @@ if($("importFile")){
 $("clearImport").addEventListener("click",()=>{$("importJson").value="";});
 $("focusTab").addEventListener("click",()=>setView("focus"));
 $("reviewTab").addEventListener("click",()=>setView("review"));
+if($("sessionsTab")) $("sessionsTab").addEventListener("click",()=>setView("sessions"));
+if($("designName")) $("designName").addEventListener("input",()=>{
+  state.global.name=$("designName").value.trim();
+  savePreferences();
+  autoSaveSession();
+});
 if($("toggleKicker")) $("toggleKicker").addEventListener("click",()=>{
   const el=$("kickerCopy");
   if(el.value&&el.value.trim()){el.value="";}else{el.value=BRAND.defaultKicker;}
@@ -1099,6 +1122,7 @@ try {
   if($("exportPngBtn"))    $("exportPngBtn").addEventListener("click",exportSlidePngs);
   window.addEventListener("resize",()=>{fitActivePreview();fitTitles();});
   document.fonts.ready.then(()=>{fitTitles();});
+  if(!urlLoaded && !sessionLoaded) autoCreateSession();
 } catch (err) {
   document.body.insertAdjacentHTML('afterbegin', '<div style="background:#ffebe3;color:#5f210f;padding:12px 16px;font-family:monospace;position:fixed;z-index:9999;left:12px;right:12px;top:12px;border:1px solid #ff3d00;border-radius:8px;">Render error: '+ String(err.message) +'</div>');
   console.error(err);
@@ -1266,6 +1290,8 @@ function loadConfigFromSessionParam(){
     updateSaveBtn();
   }).catch(e=>{
     setImportMessage("Session load failed: "+e.message,false);
+    window.history.replaceState({},'','/');
+    autoCreateSession();
   });
   return true; // signal that a session load was attempted
 }
@@ -1311,6 +1337,116 @@ function updateSaveBtn(){
   if(indicator) indicator.textContent=currentSessionId?"Session: "+currentSessionId.slice(0,8)+"…":"";
 }
 
+// ─── AUTO-CREATE & SESSIONS MANAGEMENT ───────────────────────────────────
+
+function _storedApiKey(){
+  const param=new URLSearchParams(location.search).get('key');
+  if(param){localStorage.setItem('traent_api_key',param);return param;}
+  return localStorage.getItem('traent_api_key')||'';
+}
+
+async function autoCreateSession(){
+  if(currentSessionId) return;
+  try{
+    const r=await fetch('/api/configs',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+_storedApiKey()},
+      body:JSON.stringify({config:{version:state.version,global:state.global,slides:state.slides}})
+    });
+    if(!r.ok) return;
+    const result=await r.json();
+    currentSessionId=result.id;
+    window.history.replaceState({},'','?id='+result.id);
+    updateSaveBtn();
+  }catch(e){}
+}
+
+async function renderSessionsList(){
+  const root=$('sessionsGrid');
+  if(!root) return;
+  root.innerHTML='<div class="muted" style="padding:24px 0">Caricamento sessioni…</div>';
+  try{
+    const r=await fetch('/api/configs');
+    if(!r.ok) throw new Error(await r.text());
+    const {sessions}=await r.json();
+    if(!sessions||!sessions.length){
+      root.innerHTML='<div class="muted" style="padding:24px 0">Nessuna sessione ancora.</div>';
+      return;
+    }
+    root.innerHTML=sessions.map(s=>{
+      const name=s.name||'(senza nome)';
+      const isPub=s.status==='published';
+      const isCur=s.id===currentSessionId;
+      const dt=new Date(s.updatedAt).toLocaleString('it-IT',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      return `<div class="session-card${isCur?' active':''}" data-id="${esc(s.id)}">
+        <div class="session-card-head">
+          <span class="session-name">${esc(name)}</span>
+          <span class="badge ${isPub?'ok':'bad'}">${isPub?'Published':'Draft'}</span>
+        </div>
+        <div class="session-card-meta">Aggiornato ${esc(dt)}</div>
+        <div class="session-card-meta" style="opacity:.5">${esc(s.id)}</div>
+        <div class="session-card-actions">
+          <button type="button" class="small-btn ${isCur?'secondary':'pop'}" data-action="open">${isCur?'Corrente':'Apri'}</button>
+          <button type="button" class="small-btn secondary" data-action="toggle">${isPub?'Bozza':'Pubblica'}</button>
+          ${!isPub?`<button type="button" class="small-btn danger" data-action="delete">Elimina</button>`:''}
+        </div>
+      </div>`;
+    }).join('');
+    root.querySelectorAll('.session-card').forEach(card=>{
+      const id=card.dataset.id;
+      card.querySelector('[data-action="open"]')?.addEventListener('click',()=>openSession(id));
+      card.querySelector('[data-action="toggle"]')?.addEventListener('click',()=>{
+        const isPub=card.querySelector('.badge').textContent.trim()==='Published';
+        toggleSessionStatus(id,isPub?'draft':'published');
+      });
+      card.querySelector('[data-action="delete"]')?.addEventListener('click',()=>deleteSession(id));
+    });
+  }catch(e){
+    root.innerHTML=`<div class="notice">${esc(e.message)}</div>`;
+  }
+}
+
+async function openSession(id){
+  try{
+    const r=await fetch(`/api/configs/${encodeURIComponent(id)}`);
+    if(!r.ok) throw new Error(await r.text());
+    const row=await r.json();
+    const cfg=normalizeImportedConfig(row.config);
+    state={version:cfg.version||'stable-import-fix',global:cfg.global,slides:cfg.slides};
+    currentSessionId=id;
+    window.history.replaceState({},'','?id='+id);
+    rebuildSlideOptions();setUi();render();updateSaveBtn();
+    setView('focus');
+  }catch(e){alert('Errore apertura sessione: '+e.message);}
+}
+
+async function toggleSessionStatus(id,newStatus){
+  try{
+    const r=await fetch(`/api/configs/${encodeURIComponent(id)}`,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({status:newStatus})
+    });
+    if(!r.ok) throw new Error((await r.json()).error||await r.text());
+    renderSessionsList();
+  }catch(e){alert('Errore aggiornamento stato: '+e.message);}
+}
+
+async function deleteSession(id){
+  if(!confirm('Eliminare questa sessione? L\'operazione non è reversibile.')) return;
+  try{
+    const r=await fetch(`/api/configs/${encodeURIComponent(id)}`,{method:'DELETE'});
+    if(!r.ok) throw new Error((await r.json()).error||await r.text());
+    if(id===currentSessionId){
+      currentSessionId=null;
+      window.history.replaceState({},'','/');
+      updateSaveBtn();
+      autoCreateSession();
+    }
+    renderSessionsList();
+  }catch(e){alert('Errore eliminazione: '+e.message);}
+}
+
 function autoSaveSession(){
   if(!currentSessionId) return;
   clearTimeout(_autoSaveTimer);
@@ -1323,11 +1459,12 @@ function autoSaveSession(){
       await apiUpdateSession(currentSessionId,{version:state.version,global:state.global,slides:state.slides});
       if(indicator) indicator.textContent="Session: "+currentSessionId.slice(0,8)+"… ✓";
       setTimeout(()=>{if(indicator)indicator.textContent=currentSessionId?"Session: "+currentSessionId.slice(0,8)+"…":"";},1500);
+      const sv=$("sessionsView"); if(sv&&sv.style.display!=="none") renderSessionsList();
     }catch(e){
       if(indicator) indicator.textContent="Save failed";
     }
     _autoSaving=false;
-  },2000);
+  },500);
 }
 
 </script>

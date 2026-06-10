@@ -50,6 +50,25 @@ const store = (function createStorage() {
         updatedAt: row.updatedAt,
       };
     },
+    async list() {
+      return Array.from(sessions.values())
+        .map(row => {
+          const config = JSON.parse(row.config);
+          return {
+            id: row.id,
+            status: row.status,
+            name: (config && config.global && config.global.name) || '',
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+          };
+        })
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    },
+    async delete(id) {
+      if (!sessions.has(id)) return null;
+      sessions.delete(id);
+      return { id };
+    },
   };
 })();
 
@@ -129,7 +148,7 @@ async function handleApiRoute(req, res) {
   if (method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       'Access-Control-Max-Age': '86400',
     });
@@ -183,6 +202,12 @@ async function handleApiRoute(req, res) {
       return jsonResponse(res, 201, session);
     }
 
+    // GET /api/configs (list)
+    if (method === 'GET' && url === '/api/configs') {
+      const list = await store.list();
+      return jsonResponse(res, 200, { sessions: list });
+    }
+
     // GET /api/configs/:id
     if (method === 'GET' && url.startsWith('/api/configs/') && !url.includes('/approve')) {
       const id  = url.split('/api/configs/')[1].split('?')[0];
@@ -191,26 +216,36 @@ async function handleApiRoute(req, res) {
       return jsonResponse(res, 200, row);
     }
 
-    // PATCH /api/configs/:id (full config replacement)
+    // PATCH /api/configs/:id (config update and/or status change)
     if (method === 'PATCH' && url.startsWith('/api/configs/') && !url.endsWith('/approve')) {
-      const id  = url.split('/api/configs/')[1].split('?')[0];
+      const id = url.split('/api/configs/')[1].split('?')[0];
       const existing = await store.get(id);
       if (!existing) return jsonResponse(res, 404, { error: 'Not found' });
-      const body   = await readJsonBody(req);
-      const result = Schema.validateConfig(body.config || body);
-      if (!result.valid) {
-        return jsonResponse(res, 422, {
-          error: 'Validation failed',
-          details: result.errors,
-        });
+      const body = await readJsonBody(req);
+      let newConfig = undefined;
+      const newStatus = body.status !== undefined ? body.status : undefined;
+      if (body.config !== undefined) {
+        const result = Schema.validateConfig(body.config);
+        if (!result.valid) return jsonResponse(res, 422, { error: 'Validation failed', details: result.errors });
+        newConfig = result.normalizedConfig;
+      } else if (newStatus === undefined) {
+        // Legacy: entire body is the config
+        const result = Schema.validateConfig(body);
+        if (!result.valid) return jsonResponse(res, 422, { error: 'Validation failed', details: result.errors });
+        newConfig = result.normalizedConfig;
       }
-      // Full replacement — no merge
-      const updated = await store.update(id, result.normalizedConfig);
-      return jsonResponse(res, 200, {
-        id: updated.id,
-        status: updated.status,
-        updatedAt: updated.updatedAt,
-      });
+      const updated = await store.update(id, newConfig, newStatus);
+      return jsonResponse(res, 200, { id: updated.id, status: updated.status, updatedAt: updated.updatedAt });
+    }
+
+    // DELETE /api/configs/:id
+    if (method === 'DELETE' && url.startsWith('/api/configs/')) {
+      const id = url.split('/api/configs/')[1].split('?')[0];
+      const existing = await store.get(id);
+      if (!existing) return jsonResponse(res, 404, { error: 'Not found' });
+      if (existing.status === 'published') return jsonResponse(res, 403, { error: 'Cannot delete a published session' });
+      await store.delete(id);
+      return jsonResponse(res, 200, { ok: true });
     }
 
     // POST /api/configs/:id/approve
