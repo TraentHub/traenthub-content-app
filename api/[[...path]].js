@@ -198,18 +198,18 @@ async function handleApiRoute(req, res) {
     return;
   }
 
+  // Debug — before store init so it works even if Redis fails
+  if (method === 'GET' && (url === '/debug' || url === '/api/debug')) {
+    return res.status(200).json({
+      store: process.env.REDIS_URL ? 'redis' : 'memory',
+      redisUrlSet: !!process.env.REDIS_URL,
+      redisUrlPrefix: process.env.REDIS_URL ? process.env.REDIS_URL.slice(0, 20) + '…' : null,
+    });
+  }
+
   try {
     const store = await getStore();
     const body = req.body || {};
-
-    // GET /api/debug
-    if (method === 'GET' && (url === '/debug' || url === '/api/debug')) {
-      return res.status(200).json({
-        store: process.env.REDIS_URL ? 'redis' : 'memory',
-        redisUrlSet: !!process.env.REDIS_URL,
-        redisUrlPrefix: process.env.REDIS_URL ? process.env.REDIS_URL.slice(0, 20) + '…' : null,
-      });
-    }
 
     // GET /api/schema
     if (method === 'GET' && (url === '/schema' || url === '/api/schema')) {
