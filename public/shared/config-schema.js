@@ -41,11 +41,13 @@
   var ENUMS = Object.freeze({
     canvas: Object.freeze([
       "1080x1350",
-      "1920x1080",
-      "1200x1200",
-      "1600x900",
       "1080x1080",
       "1080x1920",
+      "1920x1080",
+      "1500x500",
+      "1584x396",
+      "851x315",
+      "1128x191",
     ]),
     status: Object.freeze([
       "draft",

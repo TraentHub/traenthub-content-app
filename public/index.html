@@ -317,7 +317,7 @@ textarea{min-height:118px;resize:vertical;font-family:'JetBrains Mono',monospace
             <div class="section-body">
               <div class="grid-2">
                 <div class="group"><label>Slide</label><select id="slide"><option value="1">Slide 1 / opener</option><option value="2">Slide 2 / content</option><option value="3">Slide 3 / content</option><option value="4">Slide 4 / content</option><option value="5">Slide 5 / closing</option></select></div>
-                <div class="group"><label>Canvas size</label><select id="canvas"><option value="1080x1350">1080×1350</option><option value="1920x1080">1920×1080</option><option value="1200x1200">1200×1200</option><option value="1600x900">1600×900</option><option value="1080x1080">1080×1080</option><option value="1080x1920">1080×1920</option></select></div>
+                <div class="group"><label>Canvas size</label><select id="canvas"><option value="1080x1350">1080×1350 (Instagram/Facebook ritratto)</option><option value="1080x1080">1080×1080 (Instagram/Facebook quadrato)</option><option value="1080x1920">1080×1920 (Story / Reel / TikTok)</option><option value="1920x1080">1920×1080 (Video / presentazione)</option><option value="1500x500">1500×500 (X header)</option><option value="1584x396">1584×396 (LinkedIn cover)</option><option value="851x315">851×315 (Facebook cover)</option><option value="1128x191">1128×191 (LinkedIn azienda)</option></select></div>
               </div>
               <div class="grid-2">
                 <div class="group"><label>Layout</label><select id="layout"><option value="left_text_right_visual">Left text / right visual</option><option value="centered_manifesto">Centered manifesto</option><option value="poster_text">Poster text</option><option value="split_panel">Split panel</option></select></div>
@@ -654,6 +654,11 @@ function titleBaseForCanvas(canvas){
   if(c==="1600x900") return 158;
   if(c==="1080x1080" || c==="1200x1200") return 182;
   if(c==="1080x1920") return 154;
+  // Wide social headers/covers — short canvases, smaller starting title size.
+  if(c==="1500x500") return 96;
+  if(c==="1584x396") return 76;
+  if(c==="851x315") return 64;
+  if(c==="1128x191") return 40;
   return 198; // 1080x1350 default: fuller editorial density
 }
 
@@ -849,7 +854,8 @@ function buildHtmlDeck(){
     "document.documentElement.style.setProperty(\"--ratio\",\""+cw+"/"+ch+"\");"+
     "function sc(n){var v=Number(n);return(isNaN(v)||v===0)?1:Math.pow(1.12,v);}"+
     "function tb(){if(cw===1920&&ch===1080)return 168;if(cw===1600&&ch===900)return 158;"+
-    "if((cw===1080&&ch===1080)||(cw===1200&&ch===1200))return 182;if(cw===1080&&ch===1920)return 154;return 198;}"+
+    "if((cw===1080&&ch===1080)||(cw===1200&&ch===1200))return 182;if(cw===1080&&ch===1920)return 154;"+
+    "if(cw===1500&&ch===500)return 96;if(cw===1584&&ch===396)return 76;if(cw===851&&ch===315)return 64;if(cw===1128&&ch===191)return 40;return 198;}"+
     "function fitSlides(){document.querySelectorAll(\".slide-canvas\").forEach(function(c){"+
     "var s=c.clientWidth/cw;"+
     "var slide=c.querySelector(\".slide\");if(slide)slide.style.setProperty(\"--slide-fit\",s);"+
