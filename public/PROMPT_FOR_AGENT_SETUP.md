@@ -14,7 +14,7 @@ Un'app web (Traent Hub Visual Configurator) espone un'API REST. L'agente deve:
 
 ## Endpoint e base URL
 
-**Produzione**: `https://traent-hub-visual-tool.vercel.app`
+**Produzione**: `https://traenthub-content-app.vercel.app`
 
 ### `GET /api/schema`
 Nessuna auth. Ritorna `{ version, enums, defaults, requiredFields, optionalFields, guidance }`.

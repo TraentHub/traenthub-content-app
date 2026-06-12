@@ -33,7 +33,7 @@ Deploy only `index.html` to any static host. No build step needed.
 
 ## Stable URL
 
-Aim for a stable URL like `https://traent-hub-visual.vercel.app` so the GPT can always direct users there.
+Aim for a stable URL like `https://traenthub-content-app.vercel.app` so the GPT can always direct users there.
 
 ## Phase 1 (current)
 

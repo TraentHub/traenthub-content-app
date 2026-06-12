@@ -26,7 +26,7 @@ info:
 servers:
   - url: http://localhost:3000
     description: Local development
-  - url: https://your-app.vercel.app
+  - url: https://traenthub-content-app.vercel.app
     description: Production
 
 paths:

@@ -4,7 +4,7 @@
 
 A **single-file static HTML application** (~1290 lines) that lets users visually configure social media slide decks for Traent Hub. Each deck has multiple slides with title, body, kicker, footer, graphic assets, emphasis devices, and brand elements.
 
-**Repo:** `https://github.com/luca-nik/traent-hub-visual-tool`
+**Repo:** `https://github.com/TraentHub/traenthub-content-app`
 
 ## File structure
 

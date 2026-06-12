@@ -19,7 +19,7 @@ const API_KEY = process.env.TRAENT_API_KEY;           // optional, set to requir
 const MAX_BODY_BYTES = 10 * 1024 * 1024;              // 10 MB payload limit
 
 const ALLOWED_ORIGINS = [
-  'https://traent-hub-visual-tool.vercel.app',
+  'https://traenthub-content-app.vercel.app',
   'http://localhost:3000',
   'http://localhost:3001',
   'http://127.0.0.1:3000',

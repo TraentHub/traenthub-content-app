@@ -4,7 +4,7 @@
 
 Traent Hub Visual Tool is a web-based visual configurator for creating branded social media slide decks. Users (or AI agents) define slides as JSON, and the app renders them visually with live editing, emphasis rules, and multiple export formats.
 
-**Live URL**: https://traent-hub-visual-tool.vercel.app
+**Live URL**: https://traenthub-content-app.vercel.app
 
 ## Use Cases
 
@@ -14,7 +14,7 @@ Traent Hub Visual Tool is a web-based visual configurator for creating branded s
 
 ## API Endpoints
 
-Base URL: `https://traent-hub-visual-tool.vercel.app`
+Base URL: `https://traenthub-content-app.vercel.app`
 
 ### GET /api/schema
 Returns the current config schema — enums, defaults, required fields, and usage guidance. **No auth required.**
@@ -108,7 +108,7 @@ Marks a session as approved. **No auth required.**
 
 ## Privacy Policy
 
-Available at: https://traent-hub-visual-tool.vercel.app/privacy
+Available at: https://traenthub-content-app.vercel.app/privacy
 
 ## Contact
 
