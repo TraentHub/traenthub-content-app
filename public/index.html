@@ -280,8 +280,6 @@ textarea{min-height:118px;resize:vertical;font-family:'JetBrains Mono',monospace
     </div>
     <div class="export-btns">
       <input id="designName" class="name-input" type="text" placeholder="design-name" autocomplete="off" spellcheck="false" />
-      <button class="icon-btn" id="downloadJsonBtn" title="Download JSON" type="button">&#8595; JSON</button>
-      <button class="icon-btn" id="downloadHtmlBtn" title="Download rendered HTML deck" type="button">&#8595; HTML</button>
       <button class="icon-btn" id="exportPngBtn" title="Export slides as PNG" type="button">&#8595; PNG</button>
       <button class="icon-btn" id="exportPdfBtn" title="Export slides as a multi-page PDF" type="button">&#8595; PDF</button>
       <button class="icon-btn" id="exportPptxBtn" title="Export as layered PPTX (editable layers in Canva/PowerPoint)" type="button">&#8595; PPTX</button>
@@ -784,12 +782,6 @@ function renderRuleList(){
     });
   });
 }
-function downloadJson(){
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:"application/json"}));
-  a.download=BRAND.fileNamePrefix+"-config.json"; a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-}
 function _offscreenFit(ids,cw,ch,canvas){
   const host=document.createElement("div");
   host.style.cssText=`position:fixed;left:${-(cw+200)}px;top:0;width:${cw}px;height:${ch}px;pointer-events:none;overflow:hidden`;
@@ -891,13 +883,6 @@ function buildHtmlDeck(){
     '<\/body><\/html>'].join("\n");
 }
 
-function downloadHtmlDeck(){
-  const html=buildHtmlDeck();
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(new Blob([html],{type:"text/html;charset=utf-8"}));
-  a.download=slugify(state.global.name||"deck")+".html"; a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-}
 async function exportSlidePngs(){
   const btn=$("exportPngBtn");
   if(!btn) return;
@@ -1225,8 +1210,6 @@ try {
   const hadSave=!urlLoaded && !sessionLoaded && loadPreferences();
   setUi(); render();
   if(!urlLoaded && !sessionLoaded && !hadSave) loadSampleConfig();
-  if($("downloadJsonBtn")) $("downloadJsonBtn").addEventListener("click",downloadJson);
-  if($("downloadHtmlBtn")) $("downloadHtmlBtn").addEventListener("click",downloadHtmlDeck);
   if($("exportPngBtn"))    $("exportPngBtn").addEventListener("click",exportSlidePngs);
   if($("exportPdfBtn"))    $("exportPdfBtn").addEventListener("click",exportSlidePdf);
   if($("exportPptxBtn"))   $("exportPptxBtn").addEventListener("click",exportSlidePptx);
