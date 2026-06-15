@@ -283,6 +283,7 @@ textarea{min-height:118px;resize:vertical;font-family:'JetBrains Mono',monospace
       <button class="icon-btn" id="downloadJsonBtn" title="Download JSON" type="button">&#8595; JSON</button>
       <button class="icon-btn" id="downloadHtmlBtn" title="Download rendered HTML deck" type="button">&#8595; HTML</button>
       <button class="icon-btn" id="exportPngBtn" title="Export slides as PNG" type="button">&#8595; PNG</button>
+      <button class="icon-btn" id="exportPdfBtn" title="Export slides as a multi-page PDF" type="button">&#8595; PDF</button>
       <button class="icon-btn" id="exportPptxBtn" title="Export as layered PPTX (editable layers in Canva/PowerPoint)" type="button">&#8595; PPTX</button>
     </div>
   </header>
@@ -935,6 +936,54 @@ async function exportSlidePngs(){
   }
   btn.textContent=orig;
 }
+async function exportSlidePdf(){
+  const btn=$("exportPdfBtn");
+  if(!btn) return;
+  const orig=btn.textContent;
+  // Load jsPDF on demand (same lazy-load pattern as JSZip / PptxGenJS)
+  if(!(window.jspdf&&window.jspdf.jsPDF)){
+    btn.textContent="Loading…";
+    try{
+      await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+    }catch(e){btn.textContent=orig;alert("Could not load jsPDF.");return;}
+  }
+  btn.textContent="Rendering…";
+  try{
+    const html=buildHtmlDeck();
+    const name=slugify(($("designName")&&$("designName").value.trim())||state.global.name||"deck");
+    // Reuse the PNG render endpoint. Locally → same-origin /screenshot;
+    // in deployment → the Cloud Run export microservice (EXPORT_SERVICE_URL).
+    const screenshotUrl=(location.hostname==="localhost"||location.hostname==="127.0.0.1")?"/screenshot":EXPORT_SERVICE_URL+"/screenshot";
+    const resp=await fetch(screenshotUrl,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({html})
+    });
+    if(!resp.ok) throw new Error(await resp.text());
+    const {slides}=await resp.json();
+    if(!slides||!slides.length) throw new Error("No slides returned");
+    btn.textContent="Building…";
+    const {jsPDF}=window.jspdf;
+    let pdf=null;
+    // One PNG per page, page sized to the slide's pixel dimensions so the
+    // image fills the page edge-to-edge (no rescaling, identical to PNG export).
+    for(const {png} of slides){
+      const dims=await new Promise((res,rej)=>{const im=new Image();im.onload=()=>res({w:im.naturalWidth,h:im.naturalHeight});im.onerror=rej;im.src="data:image/png;base64,"+png;});
+      if(!pdf){
+        pdf=new jsPDF({orientation:dims.w>=dims.h?"landscape":"portrait",unit:"px",format:[dims.w,dims.h]});
+      }else{
+        pdf.addPage([dims.w,dims.h],dims.w>=dims.h?"landscape":"portrait");
+      }
+      pdf.addImage("data:image/png;base64,"+png,"PNG",0,0,dims.w,dims.h);
+    }
+    btn.textContent="Saving…";
+    pdf.save(name+".pdf");
+  }catch(e){
+    console.error(e);
+    alert("PDF export failed.\n\n"+(location.hostname==="localhost"?"Make sure the server is running:\n  npm run dev\n\n":"The export service may be temporarily unavailable.\n\n")+e.message);
+  }
+  btn.textContent=orig;
+}
 async function exportSlidePptx(){
   const btn=$("exportPptxBtn");
   if(!btn) return;
@@ -1179,6 +1228,7 @@ try {
   if($("downloadJsonBtn")) $("downloadJsonBtn").addEventListener("click",downloadJson);
   if($("downloadHtmlBtn")) $("downloadHtmlBtn").addEventListener("click",downloadHtmlDeck);
   if($("exportPngBtn"))    $("exportPngBtn").addEventListener("click",exportSlidePngs);
+  if($("exportPdfBtn"))    $("exportPdfBtn").addEventListener("click",exportSlidePdf);
   if($("exportPptxBtn"))   $("exportPptxBtn").addEventListener("click",exportSlidePptx);
   window.addEventListener("resize",()=>{fitActivePreview();fitTitles();});
   document.fonts.ready.then(()=>{fitTitles();});
